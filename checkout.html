@@ -150,38 +150,91 @@
 
                     <!-- Payment Details Section -->
                     <div id="payment-section" class="hidden transition-opacity duration-500 opacity-0 space-y-6">
-                        <h2 class="font-serif text-base font-bold text-primary text-center uppercase tracking-widest">Thanh toán chuyển khoản</h2>
+                        <h2 class="font-serif text-base font-bold text-primary text-center uppercase tracking-widest">Thanh toán cọc 50%</h2>
                         
                         <div class="flex flex-col items-center gap-6">
-                            <div class="bg-white p-4 rounded-xl shadow-lg border-2 border-primary/20 w-fit mx-auto">
-                                <div class="w-56 h-56 bg-white flex items-center justify-center relative overflow-hidden rounded-lg">
-                                    <img id="checkout-qr" src="" alt="QR Thanh toán" class="w-full h-full object-contain" />
-                                    <div id="qr-loading" class="absolute inset-0 bg-white/80 flex items-center justify-center">
+                            <!-- PayOS QR & Info Block -->
+                            <div class="bg-white p-6 rounded-2xl shadow-xl border-2 border-primary/20 w-full max-w-sm mx-auto text-center space-y-6">
+                                <div id="payos-qr-container" class="relative bg-white p-3 rounded-xl border border-primary/10 shadow-inner flex items-center justify-center min-h-[250px]">
+                                    <img id="checkout-qr" src="" alt="QR Thanh toán" class="w-full h-auto object-contain hidden" />
+                                    <div id="qr-loading" class="flex flex-col items-center gap-2">
                                         <span class="material-symbols-outlined animate-spin text-primary">sync</span>
+                                        <span class="text-[10px] text-primary/60 font-medium">Đang tạo mã thanh toán...</span>
                                     </div>
+                                </div>
+
+                                <div class="space-y-3">
+                                    <div class="flex flex-col items-center">
+                                        <span class="text-[10px] uppercase tracking-widest text-primary/50 font-bold">Số tài khoản</span>
+                                        <span id="payos-account-no" class="text-xl font-serif font-bold text-primary tracking-widest">...</span>
+                                    </div>
+                                    <div class="flex flex-col items-center">
+                                        <span class="text-[10px] uppercase tracking-widest text-primary/50 font-bold">Chủ tài khoản</span>
+                                        <span id="payos-account-name" class="text-sm font-serif font-bold uppercase text-primary">...</span>
+                                    </div>
+                                </div>
+
+                                <!-- Action Buttons: Copy & Transfer -->
+                                <div class="grid grid-cols-2 gap-4">
+                                    <button id="copy-stk-btn" class="flex items-center justify-center gap-2 bg-primary/10 hover:bg-primary/20 text-primary py-3 px-4 rounded-xl text-xs font-bold transition-all border border-primary/30 active:scale-95">
+                                        <span class="material-symbols-outlined text-sm">content_copy</span>
+                                        <span>Sao chép STK</span>
+                                    </button>
+                                    <a id="transfer-app-btn" href="#" class="flex items-center justify-center gap-2 bg-primary text-white py-3 px-4 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 hover:shadow-lg">
+                                        <span class="material-symbols-outlined text-sm">rocket_launch</span>
+                                        <span>Chuyển khoản</span>
+                                    </a>
                                 </div>
                             </div>
 
-                            <div class="w-full space-y-4">
-                                <div class="flex flex-col text-center">
-                                    <span class="text-base uppercase tracking-widest text-primary/70 font-bold">Ngân hàng</span>
-                                    <span class="text-base font-bold text-primary">Vietcombank</span>
+                            <div class="w-full space-y-2 border-t border-primary/10 pt-4">
+                                <div class="flex justify-between items-center text-xs">
+                                    <span class="text-primary/70 font-medium">Nội dung cọc</span>
+                                    <span id="checkout-transfer-content" class="font-bold text-primary uppercase">...</span>
                                 </div>
-                                <div class="flex flex-col text-center">
-                                    <span class="text-base uppercase tracking-widest text-primary/70 font-bold">Số tài khoản</span>
-                                    <span class="text-base font-serif tracking-widest font-bold text-primary">0889 717 713</span>
-                                </div>
-                                <div class="flex flex-col text-center">
-                                    <span class="text-base uppercase tracking-widest text-primary/70 font-bold">Chủ tài khoản</span>
-                                    <span class="text-base font-serif font-bold uppercase text-primary">NGUYEN VAN CHON</span>
-                                </div>
-                                <div class="flex flex-col text-center border-t border-primary/20 pt-4">
-                                    <span class="text-base uppercase tracking-widest text-primary/70 font-bold">Nội dung chuyển khoản</span>
-                                    <span id="checkout-transfer-content" class="text-base font-bold text-primary">...</span>
+                                <div class="flex justify-between items-center text-xs">
+                                    <span class="text-primary/70 font-medium">Số tiền cọc</span>
+                                    <span id="checkout-deposit-amount" class="font-bold text-primary">...</span>
                                 </div>
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Success Section -->
+            <div id="success-section" class="hidden opacity-0 transition-all duration-700 flex flex-col items-center justify-center py-12 space-y-8">
+                <div class="relative">
+                    <div class="absolute inset-0 bg-green-100 rounded-full animate-ping opacity-25"></div>
+                    <div class="relative bg-green-500 text-white rounded-full p-6 shadow-2xl">
+                        <span class="material-symbols-outlined text-6xl">check_circle</span>
+                    </div>
+                </div>
+                
+                <div class="text-center space-y-4">
+                    <h2 class="font-serif text-3xl font-bold text-green-600">Thanh Toán Thành Công!</h2>
+                    <p class="text-primary font-medium">Cảm ơn bạn đã lựa chọn Chồn Village. <br/>Yêu cầu đặt phòng của bạn đã được ghi nhận.</p>
+                </div>
+
+                <div class="w-full bg-primary/5 p-6 rounded-2xl border-2 border-dashed border-primary/30 space-y-4">
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="text-slate-500">Mã đơn hàng:</span>
+                        <span id="success-order-code" class="font-bold text-primary">...</span>
+                    </div>
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="text-slate-500">Trạng thái:</span>
+                        <span class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-[10px] font-bold uppercase">Đã thanh toán</span>
+                    </div>
+                </div>
+
+                <div class="flex flex-col w-full gap-3">
+                    <a href="index.html" class="w-full bg-primary text-white text-center py-4 rounded-xl font-bold tracking-wider hover:scale-[1.02] transition-transform shadow-lg uppercase text-sm">
+                        Quay lại trang chủ
+                    </a>
+                    <a href="https://zalo.me/0889717713" target="_blank" class="w-full bg-white text-primary border-2 border-primary text-center py-4 rounded-xl font-bold tracking-wider hover:bg-primary/5 transition-colors uppercase text-sm flex items-center justify-center gap-2">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Icon_of_Zalo.svg/1200px-Icon_of_Zalo.svg.png" class="h-5 w-5" />
+                        Liên hệ hỗ trợ Zalo
+                    </a>
                 </div>
             </div>
             <!-- CTA Button -->

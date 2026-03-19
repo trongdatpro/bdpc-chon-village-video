@@ -999,7 +999,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             const getStr = d => {
                                 const yy = d.getFullYear(); const mm = String(d.getMonth() + 1).padStart(2, '0'); const dd = String(d.getDate()).padStart(2, '0');
                                 return `${yy}-${mm}-${dd}`;
-                            };
+                                };
                             const ciStr = getStr(ciDate);
                             const coStr = getStr(coDate);
 
@@ -1448,7 +1448,7 @@ function renderReviews(reviews) {
                         <span class="text-slate-500 font-bold text-[10px] uppercase">${label}</span>
                         <span class="text-graphite font-bold text-[13px]">${val}</span>
                     </div>`;
-        };
+        };  
 
         const hasScores = r.roomScore || r.serviceScore || r.locationScore;
         const scoreRow = hasScores ? `

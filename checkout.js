@@ -8,7 +8,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
     console.log("Checkout Script Initialized");
 
-    // 2. Retrieve Data From Session
+    // 2. Check for PayOS Return Parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const status = urlParams.get('status');
+    const orderCode = urlParams.get('orderCode');
+
+    if (status === 'PAID') {
+        console.log("Payment Successful! Order Code:", orderCode);
+        
+        // Hide everything else
+        const mainContent = document.querySelector('main > div.molding-border');
+        if (mainContent) {
+            // Hide all children except header/footer if needed, but here we hide sections
+            document.querySelectorAll('main > div.molding-border > div, main > div.molding-border > button, main > div.molding-border > p').forEach(el => {
+                if (el.id !== 'success-section') el.classList.add('hidden');
+            });
+        }
+
+        const successSection = document.getElementById('success-section');
+        const successOrderCode = document.getElementById('success-order-code');
+        
+        if (successSection) {
+            successSection.classList.remove('hidden');
+            setTimeout(() => successSection.classList.remove('opacity-0'), 10);
+        }
+        if (successOrderCode) successOrderCode.textContent = orderCode || 'N/A';
+
+        // Clear Session
+        sessionStorage.removeItem('chonVillageBooking');
+        sessionStorage.removeItem('chonVillageSelectedRooms');
+        sessionStorage.removeItem('chonVillageSelectedRoom');
+        
+        return; // Stop further initialization
+    }
+
+    // 3. Retrieve Data From Session
     const bookingDataStr = sessionStorage.getItem('chonVillageBooking');
     const selectedRoomsStr = sessionStorage.getItem('chonVillageSelectedRooms');
     const selectedRoomStr = sessionStorage.getItem('chonVillageSelectedRoom'); // Fallback for single room
@@ -208,9 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Reset Initial State
     if (confirmBtn) {
-        confirmBtn.disabled = true;
-        confirmBtn.classList.remove('hidden');
-        confirmBtn.classList.add('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
+        confirmBtn.classList.add('hidden'); // Hide original confirm button as we use Transfer button now
     }
     
     if (summarySection) {
@@ -220,9 +252,11 @@ document.addEventListener('DOMContentLoaded', () => {
         paymentSection.classList.add('hidden', 'opacity-0');
     }
 
+    let payosData = null;
+
     // Toggle Visibility on Checkbox
     if (agreeCheckbox) {
-        agreeCheckbox.addEventListener('change', (e) => {
+        agreeCheckbox.addEventListener('change', async (e) => {
             const isChecked = e.target.checked;
             
             if (isChecked) {
@@ -234,49 +268,80 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (paymentSection) {
                     paymentSection.classList.remove('hidden');
                     setTimeout(() => paymentSection.classList.remove('opacity-0'), 10);
-
-                    // Update QR and Transfer Content
-                    const qrImg = document.getElementById('checkout-qr');
-                    const qrLoading = document.getElementById('qr-loading');
-                    const transferContentEl = document.getElementById('checkout-transfer-content');
                     
-                    const transferContent = `CHON ${bookingData.phone || ''}`.toUpperCase();
-                    if (transferContentEl) transferContentEl.textContent = transferContent;
+                    // Populate basic info
+                    const transferContentEl = document.getElementById('checkout-transfer-content');
+                    const depositAmountEl = document.getElementById('checkout-deposit-amount');
+                    if (transferContentEl) transferContentEl.textContent = `CHON ${bookingData.phone || ''}`.toUpperCase();
+                    if (depositAmountEl) depositAmountEl.textContent = renderCurrency(depositAmount);
 
-                    if (qrImg) {
-                        const bankId = 'VCB';
-                        const accountNo = '0889717713';
-                        const template = 'compact';
-                        const qrUrl = `https://img.vietqr.io/image/${bankId}-${accountNo}-${template}.png?amount=${depositAmount}&addInfo=${encodeURIComponent(transferContent)}&accountName=NGUYEN%20VAN%20CHON`;
+                    // Call PayOS Backend Automatically
+                    try {
+                        console.log("Creating PayOS link...");
+                        const response = await fetch('http://localhost:3000/create-payment-link', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                amount: depositAmount,
+                                description: `CHON ${bookingData.phone || ''}`.substring(0, 25)
+                            })
+                        });
                         
-                        qrImg.src = qrUrl;
-                        qrImg.onload = () => {
-                            if (qrLoading) qrLoading.classList.add('hidden');
-                        };
+                        const data = await response.json();
+                        if (!response.ok) throw new Error(data.error || "Lỗi kết nối Server");
+
+                        payosData = data;
+
+                        if (payosData.qrCode) {
+                            const qrImg = document.getElementById('checkout-qr');
+                            const qrLoading = document.getElementById('qr-loading');
+                            const accountNoEl = document.getElementById('payos-account-no');
+                            const accountNameEl = document.getElementById('payos-account-name');
+                            const transferBtn = document.getElementById('transfer-app-btn');
+
+                            if (qrImg) {
+                                qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(payosData.qrCode)}`;
+                                qrImg.onload = () => {
+                                    qrImg.classList.remove('hidden');
+                                    if (qrLoading) qrLoading.classList.add('hidden');
+                                };
+                            }
+                            if (accountNoEl) accountNoEl.textContent = payosData.accountNumber;
+                            if (accountNameEl) accountNameEl.textContent = payosData.accountName;
+                            if (transferBtn) {
+                                transferBtn.href = payosData.checkoutUrl;
+                                transferBtn.innerHTML = '<span class="material-symbols-outlined text-sm">rocket_launch</span><span>Chuyển khoản</span>';
+                            }
+                        } else {
+                            throw new Error("PayOS không trả về mã QR. Hãy kiểm tra Dashboard.");
+                        }
+                    } catch (err) {
+                        console.error("PayOS Error:", err);
+                        const qrLoading = document.getElementById('qr-loading');
+                        if (qrLoading) {
+                            qrLoading.innerHTML = `
+                                <div class="flex flex-col items-center gap-2 px-4 py-2">
+                                    <span class="material-symbols-outlined text-red-500 text-3xl">error</span>
+                                    <span class="text-[10px] text-red-500 font-bold uppercase tracking-tight">Lỗi Kết Nối PayOS</span>
+                                    <p class="text-[9px] text-slate-500 text-center leading-tight">${err.message}</p>
+                                    <p class="text-[8px] text-primary underline mt-1">Gợi ý: Kiểm tra Kênh thanh toán & Checksum Key</p>
+                                </div>
+                            `;
+                        }
                     }
                 }
-                // Unlock Button
-                if (confirmBtn) {
-                    confirmBtn.disabled = false;
-                    confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
-                }
 
-                // Smooth scroll to summary section with offset for sticky header
+                // Smooth scroll
                 setTimeout(() => {
                     if (summarySection) {
                         const header = document.querySelector('header');
                         const headerHeight = header ? header.offsetHeight : 80;
-                        const elementPosition = summarySection.getBoundingClientRect().top;
-                        const offsetPosition = elementPosition + window.pageYOffset - headerHeight - 20;
-
-                        window.scrollTo({
-                            top: offsetPosition,
-                            behavior: 'smooth'
-                        });
+                        const offsetPosition = summarySection.getBoundingClientRect().top + window.pageYOffset - headerHeight - 20;
+                        window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
                     }
                 }, 300);
             } else {
-                // Hide Summary & Payment
+                // Hide Sections
                 if (summarySection) {
                     summarySection.classList.add('opacity-0');
                     setTimeout(() => summarySection.classList.add('hidden'), 500);
@@ -285,54 +350,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     paymentSection.classList.add('opacity-0');
                     setTimeout(() => paymentSection.classList.add('hidden'), 500);
                 }
-                // Lock Button
-                if (confirmBtn) {
-                    confirmBtn.disabled = true;
-                    confirmBtn.classList.add('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
-                }
             }
         });
     }
 
-    // 7. Zalo Submission Logic
-    if (confirmBtn) {
-        confirmBtn.addEventListener('click', () => {
-            const roomNames = roomsData.map(r => r.name).join(' + ');
-            const message = `Xin chào Chồn Village,\nTôi muốn gửi biên lai chuyển khoản cho đơn đặt phòng:\n- Phòng: ${roomNames}\n- Thời gian: ${dateRangeStr}\n- Tổng: ${renderCurrency(grandTotalAmount)}\n- Đã cọc (50%): ${renderCurrency(depositAmount)}\n- Tên khách: ${bookingData.name || 'Khách hàng'}\n- SĐT: ${bookingData.phone || ''}`;
+    // 7. Copy & Transfer button logic
+    const copyBtn = document.getElementById('copy-stk-btn');
+    if (copyBtn) {
+        copyBtn.addEventListener('click', () => {
+            // Priority: PayOS Data, Fallback: Manual Bank from user image
+            const accountNumber = (payosData && payosData.accountNumber) ? payosData.accountNumber : "0173100004750004";
             
-            const zaloMsg = encodeURIComponent(message);
-            const zaloUrl = `https://zalo.me/0889717713?text=${zaloMsg}`;
-            const zaloDeepLink = `zalo://chat?phone=0889717713&text=${zaloMsg}`;
-            
-            // Try deep link
-            window.location.href = zaloDeepLink;
-            
-            // Fallback
-            setTimeout(() => {
-                window.open(zaloUrl, '_blank');
-            }, 500);
-
-            // Toast feedback
-            const toast = document.getElementById('toast-message');
-            if (toast) {
-                toast.innerHTML = `
-                    <div class="flex flex-col gap-1 items-center">
-                        <span class="material-symbols-outlined text-green-600 text-2xl">check_circle</span>
-                        <span>Đang kết nối tới Zalo...</span>
-                        <span>Xin cảm ơn bạn đã lựa chọn Chồn Village.</span>
-                    </div>
-                `;
-                toast.classList.remove('opacity-0');
-                
-                setTimeout(() => {
-                    toast.classList.add('opacity-0');
-                    setTimeout(() => {
-                        sessionStorage.removeItem('chonVillageBooking');
-                        sessionStorage.removeItem('chonVillageSelectedRoom');
-                        window.location.href = 'index.html';
-                    }, 500);
-                }, 5000);
-            }
+            navigator.clipboard.writeText(accountNumber).then(() => {
+                const originalText = copyBtn.innerHTML;
+                copyBtn.innerHTML = '<span class="material-symbols-outlined text-sm">check</span><span>Đã chép</span>';
+                setTimeout(() => { copyBtn.innerHTML = originalText; }, 2000);
+            }).catch(err => {
+                console.error("Clipboard Error:", err);
+                alert("STK: " + accountNumber);
+            });
         });
     }
 });

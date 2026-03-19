@@ -4,9 +4,11 @@ const cors = require('cors');
 const { PayOS } = require('@payos/node'); 
 require('dotenv').config();
 
+const path = require('path');
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.static(__dirname)); // Serve static files from current directory
 
 // Đoạn 1: Khởi tạo (Lấy từ phần Basic usage của bạn)
 const payos = new PayOS({
@@ -19,24 +21,32 @@ const payos = new PayOS({
 app.post('/create-payment-link', async (req, res) => {
     try {
         const { amount, description } = req.body;
-        const orderCode = Number(Date.now().toString().slice(-6));
+        // Đảm bảo orderCode là số nguyên duy nhất
+        const orderCode = Number(Date.now());
+
+        console.log(`[PAYOS] Đang tạo link thanh toán: ${orderCode} | Số tiền: ${amount}`);
 
         const paymentLinkRequest = {
             orderCode: orderCode,
             amount: Number(amount),
-            description: (description || "Chon Village").substring(0, 25),
-            cancelUrl: "http://localhost:3000", // Bạn có thể sửa sau
-            returnUrl: "http://localhost:3000"  // Bạn có thể sửa sau
+            description: (description || "Thanh toan Chon Village").normalize("NFD").replace(/[\u0300-\u036f]/g, ""), 
+            cancelUrl: "http://localhost:3000/checkout.html",
+            returnUrl: "http://localhost:3000/checkout.html"
         };
 
         const paymentLink = await payos.paymentRequests.create(paymentLinkRequest);
+        console.log("[PAYOS] OK! qrCode exists:", !!paymentLink.qrCode);
         
-        // Trả link QR về cho file rooms.js
-        res.json({ checkoutUrl: paymentLink.checkoutUrl });
+        // Trả toàn bộ thông tin về cho frontend
+        res.json(paymentLink);
 
     } catch (error) {
-        console.error("Lỗi PayOS:", error);
-        res.status(500).json({ error: error.message });
+        console.error("Lỗi PayOS:", error.message);
+        // Trả về mã lỗi cụ thể để giúp debug
+        res.status(500).json({ 
+            error: error.message,
+            tip: error.message.includes("signature") ? "Vui lòng kiểm tra lại CHECKSUM_KEY trong file .env" : "Kiểm tra kết nối mạng hoặc PayOS Dashboard"
+        });
     }
 });
 
