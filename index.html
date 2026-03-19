@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Chồn Village Gatekeeper UI</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;700&amp;family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&amp;family=Cinzel:wght@400;700&amp;display=swap"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#c8a96a",
+                        "background-light": "#f8f7f6",
+                        "background-dark": "#1e1b14",
+                        "ivory": "#FFFFF5",
+                        "graphite": "#1A1A1A"
+                    },
+                    fontFamily: {
+                        "display": ["Playfair Display", "Noto Serif", "serif"],
+                        "header": ["Cinzel", "serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        .rococo-border {
+            border: 2px solid #c8a96a;
+            position: relative;
+            padding: 2px;
+        }
+
+        .rococo-border::after {
+            content: '';
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            right: 4px;
+            bottom: 4px;
+            border: 1px solid #c8a96a;
+            pointer-events: none;
+        }
+
+        .corner-leaf {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            color: #c8a96a;
+            z-index: 10;
+        }
+
+        body {
+            min-height: max(884px, 100dvh);
+        }
+
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            10%,
+            30%,
+            50%,
+            70%,
+            90% {
+                transform: translateX(-6px);
+            }
+
+            20%,
+            40%,
+            60%,
+            80% {
+                transform: translateX(6px);
+            }
+        }
+
+        @keyframes pop {
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.15);
+            }
+
+            100% {
+                transform: scale(1.05);
+            }
+        }
+
+        .animate-shake {
+            animation: shake 0.4s cubic-bezier(.36, .07, .19, .97) both;
+        }
+
+        .animate-pop {
+            animation: pop 0.25s ease-out both;
+        }
+
+        #booking-warning {
+            opacity: 1;
+            transition: all 0.3s ease;
+            color: #8B4513 !important;
+            /* Default brown color */
+        }
+
+        #booking-warning.active {
+            color: #ef4444 !important;
+            /* Error red */
+            font-weight: 800;
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+
+<body class="bg-[#1a1a1a] font-display text-graphite">
+    <!-- Full Screen Background Overlay -->
+    <div class="relative min-h-screen w-full flex items-center justify-center p-4 pb-24 overflow-hidden">
+        <!-- Blurred Backdrop Image -->
+        <div class="absolute inset-0 z-0">
+            <div class="absolute inset-0 bg-black/40 z-10 backdrop-blur-sm"></div>
+            <div class="w-full h-full bg-cover bg-center" data-alt="Luxury Rococo bedroom with ornate gold furniture"
+                style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAmDCsufgB7RpeL0KS9fMamfv7WphQa91OqFvFv6HJghpJFpDRijQeVj_CgbCXUDImNj2bSbo_xO5qRKpdG95NLB7gged1ZNRCZsFZA7_K8s2HMf2oOi4TC2jol1VaCOh3rFUxFKmHJ9wAwcqzvKlneCvuifc1YeciTH3TVgNU0y0vIDb9C0iq2n0lLtMeEFZSX1AUcdyBZ6NhbML5fcXvyO8-RGjCOLHMx38STHHqL2ctk9KNuv0JtTPoi8llmr27yZ0PtZLGF-xed')">
+            </div>
+        </div>
+        <!-- Main Invitation Card -->
+        <div class="relative z-20 w-full max-w-md bg-ivory shadow-2xl rounded-sm p-1">
+            <div class="rococo-border bg-ivory p-8 pb-10 flex flex-col items-center">
+                <!-- Acanthus Leaf Corners -->
+                <div class="corner-leaf top-0 left-0">
+                    <svg fill="currentColor" viewbox="0 0 100 100">
+                        <path d="M10,10 Q40,10 40,40 Q10,40 10,10 M0,0 L20,0 Q20,20 0,20 Z"></path>
+                    </svg>
+                </div>
+                <div class="corner-leaf top-0 right-0 rotate-90">
+                    <svg fill="currentColor" viewbox="0 0 100 100">
+                        <path d="M10,10 Q40,10 40,40 Q10,40 10,10 M0,0 L20,0 Q20,20 0,20 Z"></path>
+                    </svg>
+                </div>
+                <div class="corner-leaf bottom-0 left-0 -rotate-90">
+                    <svg fill="currentColor" viewbox="0 0 100 100">
+                        <path d="M10,10 Q40,10 40,40 Q10,40 10,10 M0,0 L20,0 Q20,20 0,20 Z"></path>
+                    </svg>
+                </div>
+                <div class="corner-leaf bottom-0 right-0 rotate-180">
+                    <svg fill="currentColor" viewbox="0 0 100 100">
+                        <path d="M10,10 Q40,10 40,40 Q10,40 10,10 M0,0 L20,0 Q20,20 0,20 Z"></path>
+                    </svg>
+                </div>
+                <!-- Header Content -->
+                <div class="text-center mb-8">
+                    <h1 class="font-display text-graphite text-3xl font-bold mb-1 leading-tight">Rất xin chào bạn đến
+                        với <span class="whitespace-nowrap">Chồn Village!</span></h1>
+                    <div class="flex items-center justify-center w-full max-w-[150px] mx-auto my-4 opacity-70">
+                        <div class="h-px flex-1 bg-gradient-to-r from-transparent via-[#c8aa6a] to-[#c8aa6a]"></div>
+                        <div class="w-1.5 h-1.5 mx-2 border border-[#c8aa6a] rotate-45"></div>
+                        <div class="h-px flex-1 bg-gradient-to-l from-transparent via-[#c8aa6a] to-[#c8aa6a]"></div>
+                    </div>
+                    <p class="italic text-graphite/70 text-sm">Xin vui lòng điền đầy đủ thông tin dưới đây.</p>
+                </div>
+                <!-- Booking Form -->
+                <form class="w-full space-y-5">
+                    <!-- Dates -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="flex flex-col">
+                            <label class="text-[10px] uppercase tracking-widest text-primary font-bold mb-1">Nhận
+                                phòng</label>
+                            <input id="checkin-date"
+                                class="bg-transparent border-b border-primary/40 focus:border-primary focus:ring-0 text-graphite text-sm p-1 rounded-none outline-none"
+                                type="date" />
+                        </div>
+                        <div class="flex flex-col">
+                            <label class="text-[10px] uppercase tracking-widest text-primary font-bold mb-1">Trả
+                                phòng</label>
+                            <input id="checkout-date"
+                                class="bg-transparent border-b border-primary/40 focus:border-primary focus:ring-0 text-graphite text-sm p-1 rounded-none outline-none"
+                                type="date" />
+                        </div>
+                    </div>
+                    <!-- Guests Section -->
+                    <div class="space-y-4 pt-2">
+                        <div class="flex items-center justify-between border-b border-primary/20 pb-2">
+                            <span class="text-xs font-header text-graphite uppercase">Người Lớn</span>
+                            <div class="flex items-center gap-3">
+                                <button id="minus-adult"
+                                    class="size-6 rounded-full border border-primary text-primary flex items-center justify-center text-xs"
+                                    type="button">-</button>
+                                <span id="adult-count" class="text-graphite font-bold w-4 text-center">2</span>
+                                <button id="plus-adult"
+                                    class="size-6 rounded-full bg-primary text-ivory flex items-center justify-center text-xs"
+                                    type="button">+</button>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between border-b border-primary/20 pb-2">
+                            <div class="flex flex-col">
+                                <span class="text-xs font-header text-graphite uppercase">Trẻ Em</span>
+                                <div id="children-ages-container" class="flex flex-wrap gap-2 mt-1">
+                                    <!-- Dynamic child age selects will appear here -->
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <button id="minus-child"
+                                    class="size-6 rounded-full border border-primary text-primary flex items-center justify-center text-xs"
+                                    type="button">-</button>
+                                <span id="child-count" class="text-graphite font-bold w-4 text-center">0</span>
+                                <button id="plus-child"
+                                    class="size-6 rounded-full bg-primary text-ivory flex items-center justify-center text-xs"
+                                    type="button">+</button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Contact -->
+                    <div class="flex flex-col pt-2">
+                        <div class="flex items-center mb-1">
+                            <label class="text-[10px] uppercase tracking-widest text-primary font-bold">Xin vui lòng
+                                điền số zalo</label>
+                        </div>
+                        <div class="relative flex items-center">
+                            <span class="material-symbols-outlined absolute left-0 text-primary text-sm">phone</span>
+                            <input id="contact-info"
+                                class="w-full bg-transparent border-b border-primary/40 focus:border-primary focus:ring-0 text-graphite text-sm p-1 pl-6 rounded-none outline-none"
+                                placeholder="+84 000 000 000" type="tel" />
+                        </div>
+                    </div>
+                    <!-- Submit & Footnotes Container -->
+                    <div class="relative w-full mt-0 pb-4">
+                        <!-- Submit -->
+                        <button id="submit-booking"
+                            class="w-full bg-primary hover:bg-gradient-to-r hover:from-[#C8A96A] hover:via-[#E8D399] hover:to-[#C8A96A] hover:text-graphite text-ivory font-header uppercase tracking-widest py-2 transition-all duration-500 text-sm shadow-lg flex items-center justify-center"
+                            type="submit">
+                            <span id="submit-text">Xem Phòng Trống</span>
+                        </button>
+
+                        <!-- Footnote & Warning (Absolute inside button area) -->
+                        <div class="absolute -bottom-5 left-0 w-full pointer-events-none flex flex-col items-center">
+                            <p id="booking-warning"
+                                class="text-[12px] text-center font-bold italic leading-tight transition-all duration-300"
+                                style="color: #8B4513;">
+                                Chồn ưu tiên nhận đặt phòng từ 2 đêm. Với đặt phòng 1 đêm, vui lòng liên hệ Zalo.
+                            </p>
+                        </div>
+                    </div>
+
+                </form>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Contact Action Button -->
+    <div id="floating-contact-container" class="fixed bottom-24 right-1 z-50 flex flex-col-reverse items-center gap-3">
+        <!-- Hidden sliding icons -->
+        <div id="contact-icons-slide"
+            class="group flex flex-col-reverse items-center gap-3 opacity-0 translate-y-10 pointer-events-none transition-all duration-500 ease-out">
+            <!-- Phone Button -->
+            <a href="tel:0889717713"
+                class="relative flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-xl border-2 border-primary transition-all duration-500 delay-[0ms] scale-0 rotate-[360deg] group-[.opacity-100]:scale-100 group-[.opacity-100]:rotate-0 hover:scale-110 active:scale-95">
+                <span class="material-symbols-outlined text-primary text-xl">call</span>
+            </a>
+
+            <!-- Fanpage Button -->
+            <a href="https://www.facebook.com/profile.php?id=61575491687268" target="_blank"
+                class="relative flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-xl border-2 border-primary transition-all duration-500 delay-[100ms] scale-0 rotate-[360deg] group-[.opacity-100]:scale-100 group-[.opacity-100]:rotate-0 hover:scale-110 active:scale-95">
+                <svg class="h-5 w-5 fill-[#1877F2]" viewBox="0 0 24 24">
+                    <path
+                        d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                </svg>
+            </a>
+
+            <!-- Zalo Button -->
+            <a href="https://zalo.me/0889717713" target="_blank"
+                class="relative flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-xl border-2 border-primary transition-all duration-500 delay-[200ms] scale-0 rotate-[360deg] group-[.opacity-100]:scale-100 group-[.opacity-100]:rotate-0 hover:scale-110 active:scale-95">
+                <img class="h-6 w-6 object-contain"
+                    src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Icon_of_Zalo.svg/1200px-Icon_of_Zalo.svg.png"
+                    alt="Zalo" />
+            </a>
+        </div>
+
+        <!-- Main Toggle Button -->
+        <button id="contact-toggle-btn"
+            class="group relative flex h-10 w-10 flex-col items-center justify-center rounded-full bg-primary text-white shadow-xl border-2 border-white transition-transform hover:scale-105 z-10">
+            <span class="text-[9px] font-bold uppercase tracking-wider leading-none text-center">Liên Hệ</span>
+        </button>
+    </div>
+
+    <!-- Script to handle floating contact toggle -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('floating-contact-container');
+            const toggleBtn = document.getElementById('contact-toggle-btn');
+            const slidePanel = document.getElementById('contact-icons-slide');
+
+            let isOpen = false;
+
+            const toggleContactMenu = (e) => {
+                if (e) {
+                    e.stopPropagation();
+                }
+                isOpen = !isOpen;
+                if (isOpen) {
+                    slidePanel.classList.remove('opacity-0', 'translate-y-10', 'pointer-events-none');
+                    slidePanel.classList.add('opacity-100', 'translate-y-0', 'pointer-events-auto');
+                } else {
+                    slidePanel.classList.remove('opacity-100', 'translate-y-0', 'pointer-events-auto');
+                    slidePanel.classList.add('opacity-0', 'translate-y-10', 'pointer-events-none');
+                }
+            };
+
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', toggleContactMenu);
+            }
+
+            document.addEventListener('click', (event) => {
+                if (isOpen && container && !container.contains(event.target)) {
+                    toggleContactMenu();
+                }
+            });
+        });
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                const checkinInput = document.getElementById('checkin-date');
+                const checkoutInput = document.getElementById('checkout-date');
+                const bookingWarning = document.getElementById('booking-warning');
+
+                const clearWarning = () => {
+                    if (bookingWarning) bookingWarning.classList.remove('active');
+                };
+
+                // --- V5.1 Sync State Support ---
+                const bookingDataStr = sessionStorage.getItem('chonVillageBooking');
+                let initialBookingData = null;
+                try {
+                    initialBookingData = bookingDataStr ? JSON.parse(bookingDataStr) : null;
+                } catch (e) {
+                    console.error("Session storage parse failed", e);
+                }
+
+                // Setup dates constraint (min today)
+                const todayStr = new Date().toISOString().split('T')[0];
+                if (checkinInput) checkinInput.min = todayStr;
+
+                if (initialBookingData) {
+                    if (initialBookingData.checkin && checkinInput) checkinInput.value = initialBookingData.checkin;
+                    if (initialBookingData.checkout && checkoutInput) {
+                        checkoutInput.value = initialBookingData.checkout;
+                        const ciDate = initialBookingData.checkin ? new Date(initialBookingData.checkin) : null;
+                        if (ciDate && !isNaN(ciDate.getTime())) {
+                            const nextDay = new Date(ciDate);
+                            nextDay.setDate(nextDay.getDate() + 1);
+                            checkoutInput.min = nextDay.toISOString().split('T')[0];
+                        }
+                    }
+                    if (initialBookingData.phone) {
+                        const phoneInput = document.getElementById('contact-info');
+                        if (phoneInput) phoneInput.value = initialBookingData.phone;
+                    }
+                }
+
+                if (checkinInput) {
+                    checkinInput.addEventListener('change', () => {
+                        clearWarning();
+                        // Automatically set checkout to +2 days after checkin
+                        if (checkinInput.value && checkoutInput) {
+                            const checkinDate = new Date(checkinInput.value);
+
+                            // Set min checkout to +1 day
+                            const minDate = new Date(checkinDate);
+                            minDate.setDate(minDate.getDate() + 1);
+                            checkoutInput.min = minDate.toISOString().split('T')[0];
+
+                            // Set default value to +2 days
+                            const defaultCheckout = new Date(checkinDate);
+                            defaultCheckout.setDate(defaultCheckout.getDate() + 2);
+                            checkoutInput.value = defaultCheckout.toISOString().split('T')[0];
+                        }
+                    });
+                }
+
+                // Setup Guest Counters
+                const minusAdult = document.getElementById('minus-adult');
+                const plusAdult = document.getElementById('plus-adult');
+                const adultCountSpan = document.getElementById('adult-count');
+                const minusChild = document.getElementById('minus-child');
+                const plusChild = document.getElementById('plus-child');
+                const childCountSpan = document.getElementById('child-count');
+                const ageContainer = document.getElementById('children-ages-container');
+
+                function updateChildAgesUI() {
+                    if (!ageContainer) return;
+                    const currentCount = ageContainer.children.length;
+                    if (childCount > currentCount) {
+                        for (let i = currentCount; i < childCount; i++) {
+                            const select = document.createElement('select');
+                            select.className = "child-age-selector text-[10px] text-primary bg-transparent border-none py-0 pl-0 pr-5 focus:ring-0 uppercase cursor-pointer";
+                            select.innerHTML = `
+                                <option value="" disabled selected hidden>Trẻ ${i + 1}: độ tuổi</option>
+                                ${Array.from({ length: 12 }, (_, j) => `<option value="${j + 1}">${j + 1} tuổi</option>`).join('')}
+                            `;
+                            ageContainer.appendChild(select);
+                        }
+                    } else if (childCount < currentCount) {
+                        for (let i = currentCount; i > childCount; i--) {
+                            ageContainer.removeChild(ageContainer.lastChild);
+                        }
+                    }
+                }
+
+                let adultCount = initialBookingData ? (parseInt(initialBookingData.adults) || 2) : 2;
+                let childCount = initialBookingData ? (parseInt(initialBookingData.children) || 0) : 0;
+
+                // Initial UI sync
+                if (adultCountSpan) adultCountSpan.textContent = adultCount;
+                if (childCountSpan) childCountSpan.textContent = childCount;
+                updateChildAgesUI();
+
+                if (initialBookingData && initialBookingData.childrenAgeCategory && ageContainer) {
+                    const initialAges = initialBookingData.childrenAgeCategory.split(',').filter(a => a);
+                    const ageSelectors = ageContainer.querySelectorAll('.child-age-selector');
+                    initialAges.forEach((age, idx) => {
+                        if (ageSelectors[idx]) ageSelectors[idx].value = age;
+                    });
+                }
+
+                if (minusAdult) {
+                    minusAdult.addEventListener('click', () => {
+                        if (adultCount > 1) {
+                            adultCount--;
+                            if (adultCountSpan) adultCountSpan.textContent = adultCount;
+                        }
+                    });
+                }
+
+                if (plusAdult) {
+                    plusAdult.addEventListener('click', () => {
+                        adultCount++;
+                        if (adultCountSpan) adultCountSpan.textContent = adultCount;
+                    });
+                }
+
+                let isCheckingPolicy = false;
+
+                if (minusChild) {
+                    minusChild.addEventListener('click', () => {
+                        clearWarning();
+                        if (childCount > 0) {
+                            childCount--;
+                            if (childCountSpan) childCountSpan.textContent = childCount;
+                            updateChildAgesUI();
+                        }
+                    });
+                }
+
+                if (plusChild) {
+                    plusChild.addEventListener('click', () => {
+                        clearWarning();
+                        childCount++;
+                        if (childCountSpan) childCountSpan.textContent = childCount;
+                        updateChildAgesUI();
+                    });
+                }
+
+                const submitBtn = document.getElementById('submit-booking');
+                const submitText = document.getElementById('submit-text');
+
+                const POLICY_API = "https://docs.google.com/spreadsheets/d/1jszKQ6uZOqk-MD0vy--9NqISDuUDau6-gyx-KO1wck4/gviz/tq?gid=1382126270";
+
+                const fetchJSONP = (url) => new Promise((resolve) => {
+                    const cbName = 'gvizCb_' + Date.now() + Math.floor(Math.random() * 10000);
+                    const s = document.createElement('script');
+                    const timeout = setTimeout(() => {
+                        delete window[cbName];
+                        if (s.parentNode) document.head.removeChild(s);
+                        resolve(null);
+                    }, 10000); // 10s timeout
+                    window[cbName] = (res) => {
+                        clearTimeout(timeout);
+                        delete window[cbName];
+                        if (s.parentNode) document.head.removeChild(s);
+                        resolve(res);
+                    };
+                    s.src = url + (url.includes('?') ? '&' : '?') + 'tqx=out:json;responseHandler:' + cbName;
+                    document.head.appendChild(s);
+                });
+
+
+                const triggerWarningEffect = () => {
+                    if (!bookingWarning) return;
+                    bookingWarning.classList.add('active');
+                    bookingWarning.style.animation = 'none';
+                    void bookingWarning.offsetWidth;
+                    bookingWarning.style.animation = '';
+                    bookingWarning.classList.remove('animate-shake', 'animate-pop');
+                    void bookingWarning.offsetWidth;
+                    bookingWarning.classList.add('animate-shake', 'animate-pop');
+                };
+
+                const form = document.querySelector('form');
+                if (form) {
+                    form.addEventListener('submit', async (e) => {
+                        e.preventDefault();
+
+                        const checkinVal = checkinInput ? checkinInput.value : '';
+                        const checkoutVal = checkoutInput ? checkoutInput.value : '';
+                        const contactEl = document.getElementById('contact-info');
+                        const phoneVal = contactEl ? contactEl.value : '';
+                        const ageSelectors = document.querySelectorAll('.child-age-selector');
+                        const childrenAges = Array.from(ageSelectors).map(s => s.value);
+
+                        if (!checkinVal || !checkoutVal || !phoneVal) {
+                            alert("Vui lòng điền đầy đủ thông tin (ngày và số điện thoại).");
+                            return;
+                        }
+                        if (childCount > 0 && childrenAges.some(age => !age)) {
+                            alert("Vui lòng chọn đầy đủ độ tuổi của trẻ em.");
+                            return;
+                        }
+
+                        const childrenAgeStr = childrenAges.join(',');
+
+                        const parseLocal = (dateStr) => {
+                            const [y, m, d] = dateStr.split('-');
+                            return new Date(y, m - 1, d);
+                        };
+
+                        const checkinDateObj = parseLocal(checkinVal);
+                        const checkoutDateObj = parseLocal(checkoutVal);
+                        const diffTime = checkoutDateObj - checkinDateObj;
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                        if (diffDays <= 0) {
+                            alert("Ngày trả phòng phải sau ngày nhận phòng.");
+                            return;
+                        }
+
+                        // --- 1-NIGHT POLICY SYNC (v11.17 Final Edition) ---
+                        if (diffDays === 1) {
+                            try {
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                const daysLead = Math.ceil((checkinDateObj - today) / (1000 * 60 * 60 * 24));
+                                const monthId = checkinDateObj.getMonth() + 1;
+
+                                // 1. Fetch Dynamic Policy
+                                const policyResponse = await fetchJSONP(POLICY_API);
+                                let minDaysLead = 7;
+                                if (policyResponse && policyResponse.table && policyResponse.table.rows) {
+                                    const colMonth = 0; const colMinDays = 1;
+                                    const parsedPolicy = policyResponse.table.rows.map(row => ({
+                                        Month_ID: row.c[colMonth] ? row.c[colMonth].v : null,
+                                        Min_Days_Lead: row.c[colMinDays] ? row.c[colMinDays].v : null
+                                    }));
+                                    const mPolicy = parsedPolicy.find(p => p.Month_ID === monthId);
+                                    if (mPolicy && mPolicy.Min_Days_Lead !== null) {
+                                        minDaysLead = mPolicy.Min_Days_Lead;
+                                    }
+                                }
+
+                                if (daysLead > minDaysLead) {
+                                    // 2. Fetch Schedule to verify 1-night Gap
+                                    const URL_SCHEDULES = [
+                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=1441677072', // T1
+                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=2011761073', // T2
+                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=214041162',  // T3
+                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=1119565576', // T4
+                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=1564983873', // T5
+                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=1882992325', // T6
+                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=682502335',  // T7
+                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=926390804',  // T8
+                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=382926038',  // T9
+                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=1549710105', // T10
+                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=654600068',  // T11
+                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=1543178625'  // T12
+                                    ];
+
+                                    const scheduleResponse = await fetchJSONP(URL_SCHEDULES[monthId - 1]);
+                                    const checkoutMonthId = checkoutDateObj.getMonth() + 1;
+                                    const checkoutScheduleResponse = (checkoutMonthId !== monthId) ? await fetchJSONP(URL_SCHEDULES[checkoutMonthId - 1]) : scheduleResponse;
+                                    
+                                    if (scheduleResponse && scheduleResponse.table && scheduleResponse.table.rows && checkoutScheduleResponse) {
+                                        const getStr = d => {
+                                            const yy = d.getFullYear(); const mm = String(d.getMonth() + 1).padStart(2, '0'); const dd = String(d.getDate()).padStart(2, '0');
+                                            return `${yy}-${mm}-${dd}`;
+                                        };
+                                        const ciStr = getStr(checkinDateObj);
+                                        const coStr = getStr(checkoutDateObj);
+
+                                        const parseDateStr = (val, formatted) => {
+                                            if (typeof val === 'string' && val.startsWith('Date(')) {
+                                                const parts = val.substring(5, val.length - 1).split(',');
+                                                return `${parts[0]}-${String(parseInt(parts[1]) + 1).padStart(2, '0')}-${String(parseInt(parts[2])).padStart(2, '0')}`;
+                                            }
+                                            let s = String(formatted || val).trim().split(' ')[0];
+                                            if (s.includes('/')) {
+                                                const parts = s.split('/');
+                                                if (parts[2] && parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                                                if (parts[0] && parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+                                            } else if (s.includes('-')) {
+                                                const parts = s.split('-');
+                                                if (parts[0] && parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+                                            }
+                                            return s;
+                                        };
+
+                                        const ciStatuses = {};
+                                        const coStatuses = {};
+
+                                        const processSheet = (res, targetMap) => {
+                                            res.table.rows.forEach(row => {
+                                                if (!row.c || row.c.length < 3) return;
+                                                const val = row.c[0] ? row.c[0].v : null;
+                                                const formatted = row.c[0] ? row.c[0].f : null;
+                                                const rId = row.c[1] ? row.c[1].v : null;
+                                                const status = row.c[2] ? row.c[2].v : null;
+                                                if (!val || !rId || !status) return;
+
+                                                const dateStr = parseDateStr(val, formatted);
+                                                const cleanRid = String(rId).trim().replace(/ /g, '_');
+                                                
+                                                if (!targetMap[cleanRid]) targetMap[cleanRid] = {};
+                                                targetMap[cleanRid][dateStr] = String(status).trim();
+                                            });
+                                        };
+
+                                        processSheet(scheduleResponse, ciStatuses);
+                                        if (checkoutMonthId !== monthId) {
+                                            processSheet(checkoutScheduleResponse, coStatuses);
+                                        } else {
+                                            Object.assign(coStatuses, ciStatuses);
+                                        }
+
+                                        let hasAvailableRoomsOnCheckin = false;
+                                        let hasValidGapRoom = false;
+
+                                        const isBooked = (status) => {
+                                            if (!status) return false;
+                                            const s = String(status).toLowerCase();
+                                            if (s.includes('hủy')) return false;
+                                            return s.includes('đặt') || s.includes('cọc') || s.includes('thanh toán') || s.includes('đóng') || s.includes('booked') || s === 'b';
+                                        };
+
+                                        // We check every room present in ciStatuses
+                                        Object.keys(ciStatuses).forEach(roomId => {
+                                            const statusCi = ciStatuses[roomId][ciStr];
+                                            let statusCo = null;
+                                            if (coStatuses[roomId]) {
+                                                statusCo = coStatuses[roomId][coStr];
+                                            }
+
+                                            if (!isBooked(statusCi)) {
+                                                hasAvailableRoomsOnCheckin = true;
+                                                // Requirement: NEXT night MUST be booked to fill gap
+                                                if (isBooked(statusCo)) {
+                                                    hasValidGapRoom = true;
+                                                }
+                                            }
+                                        });
+
+                                        if (hasAvailableRoomsOnCheckin && !hasValidGapRoom) {
+                                            if (bookingWarning) {
+                                                bookingWarning.textContent = "Chồn ưu tiên nhận đặt phòng từ 2 đêm. Với đặt phòng 1 đêm, vui lòng liên hệ Zalo.";
+                                            }
+                                            triggerWarningEffect();
+                                            return; // BLOCK submission
+                                        }
+                                    }
+                                }
+                            } catch (e) {
+                                console.error("Error checking gap filler on index", e);
+                            }
+                        }
+
+                        const bookingData = {
+                            checkin: checkinVal,
+                            checkout: checkoutVal,
+                            adults: adultCount,
+                            children: childCount,
+                            childrenAgeCategory: childrenAgeStr,
+                            phone: phoneVal
+                        };
+                        sessionStorage.setItem('chonVillageBooking', JSON.stringify(bookingData));
+                        window.location.href = "rooms.html";
+                    });
+                }
+            } catch (globalErr) {
+                console.error("CRITICAL: index.html script execution failure", globalErr);
+            }
+        });
+    </script>
+
+</body>
+
+</html>

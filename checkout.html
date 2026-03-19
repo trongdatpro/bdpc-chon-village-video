@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+
+<html lang="vi">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Playfair+Display:ital,wght@0,700;1,700&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#c8a96a",
+                        "background-light": "#fffff5",
+                        "background-dark": "#1e1b14",
+                        "graphite": "#1a1a1a",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"],
+                        "serif": ["Playfair Display", "serif"],
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        .molding-border {
+            border: 2px solid #c8a96a;
+            outline: 1px solid #c8a96a;
+            outline-offset: 4px;
+        }
+
+        .acanthus-corner {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            color: #c8a96a;
+            pointer-events: none;
+        }
+    </style>
+    <style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+</head>
+
+<body class="bg-ivory font-display text-graphite dark:text-slate-100 min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="flex items-center bg-background-light dark:bg-background-dark p-4 pb-2 sticky top-0 z-10">
+        <div class="text-primary flex size-12 shrink-0 items-center cursor-pointer">
+            <span class="material-symbols-outlined">arrow_back_ios</span>
+        </div>
+        <h1
+            class="font-serif italic text-2xl font-bold leading-tight tracking-tight flex-1 text-center pr-12 text-primary">
+            Xác Nhận Đặt Phòng
+        </h1>
+    </header>
+    <!-- Main Content with Molding Border Frame -->
+    <main class="flex-1 p-4 relative">
+        <div class="molding-border relative bg-white/50 dark:bg-black/20 p-6 rounded-lg min-h-full">
+            <!-- Corner Ornaments (SVG Acanthus) -->
+            <div class="acanthus-corner top-[-10px] left-[-10px]">
+                <svg fill="currentColor" viewbox="0 0 100 100">
+                    <path d="M10,90 Q10,10 90,10 L90,20 Q20,20 20,90 Z"></path>
+                </svg>
+            </div>
+            <div class="acanthus-corner top-[-10px] right-[-10px] rotate-90">
+                <svg fill="currentColor" viewbox="0 0 100 100">
+                    <path d="M10,90 Q10,10 90,10 L90,20 Q20,20 20,90 Z"></path>
+                </svg>
+            </div>
+            <div class="acanthus-corner bottom-[-10px] left-[-10px] -rotate-90">
+                <svg fill="currentColor" viewbox="0 0 100 100">
+                    <path d="M10,90 Q10,10 90,10 L90,20 Q20,20 20,90 Z"></path>
+                </svg>
+            </div>
+            <div class="acanthus-corner bottom-[-10px] right-[-10px] rotate-180">
+                <svg fill="currentColor" viewbox="0 0 100 100">
+                    <path d="M10,90 Q10,10 90,10 L90,20 Q20,20 20,90 Z"></path>
+                </svg>
+            </div>
+            <!-- Policies (Now at top) -->
+            <div class="mb-8">
+                <h2 class="font-serif text-lg font-bold mb-3 text-primary">Chính sách &amp; Nội quy</h2>
+                
+                <!-- Rules Image -->
+                <div class="mb-6 rounded-lg overflow-hidden border-2 border-primary/20 shadow-lg">
+                    <img src="img/noi_quy_luu_tru.png" 
+                         alt="Nội quy lưu trú" 
+                         class="w-full h-auto" />
+                </div>
+
+                <label class="flex gap-x-3 items-start cursor-pointer group">
+                    <div class="relative flex items-center pt-1">
+                        <input id="agree-checkbox"
+                            class="peer h-5 w-5 rounded border-primary border-2 bg-transparent text-primary focus:ring-primary focus:ring-offset-0 focus:outline-none appearance-none checked:bg-primary transition-colors"
+                            type="checkbox" />
+                        <span
+                            class="material-symbols-outlined absolute text-white opacity-0 peer-checked:opacity-100 text-sm left-0.5 transition-opacity">check</span>
+                    </div>
+                    <p class="text-sm leading-relaxed text-graphite/70 dark:text-slate-300">
+                        Tôi đồng ý với nội quy lưu trú tại home và quy định hoàn hủy phòng.
+                    </p>
+                </label>
+            </div>
+
+            <!-- Consolidated Summary & Payment Frame -->
+            <div id="summary-section" class="hidden opacity-0 transition-all duration-500">
+                <h2 class="font-serif text-lg font-bold mb-4 text-primary">Thông tin đặt phòng</h2>
+                
+                <!-- Dynamic Room List Container -->
+                <div id="checkout-rooms-list" class="space-y-6 mb-8">
+                    <!-- Room cards will be injected here -->
+                </div>
+
+                <!-- Styled Single Frame for Totals and Payment -->
+                <div class="p-6 bg-primary/5 rounded-xl border-2 border-primary/30 shadow-md space-y-6">
+                    <!-- Grand Total Section -->
+                    <div class="space-y-4 border-b border-primary/20 pb-6">
+                        <div class="flex justify-center items-center">
+                            <span class="text-base font-serif font-bold text-primary text-center">Tất cả chi phí đã bao gồm phụ thu (nếu có)</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-base font-serif font-bold text-primary">Tổng cộng tất cả:</span>
+                            <span id="checkout-total" class="text-base font-serif font-bold text-primary">...</span>
+                        </div>
+                        <div class="flex justify-between items-center p-3 bg-primary/10 rounded-lg">
+                            <span class="text-base font-serif font-bold text-primary">Tiền đặt cọc (50%):</span>
+                            <span id="checkout-deposit" class="text-base font-serif font-bold text-primary">...</span>
+                        </div>
+                    </div>
+
+                    <!-- Payment Details Section -->
+                    <div id="payment-section" class="hidden transition-opacity duration-500 opacity-0 space-y-6">
+                        <h2 class="font-serif text-base font-bold text-primary text-center uppercase tracking-widest">Thanh toán chuyển khoản</h2>
+                        
+                        <div class="flex flex-col items-center gap-6">
+                            <div class="bg-white p-4 rounded-xl shadow-lg border-2 border-primary/20 w-fit mx-auto">
+                                <div class="w-56 h-56 bg-white flex items-center justify-center relative overflow-hidden rounded-lg">
+                                    <img id="checkout-qr" src="" alt="QR Thanh toán" class="w-full h-full object-contain" />
+                                    <div id="qr-loading" class="absolute inset-0 bg-white/80 flex items-center justify-center">
+                                        <span class="material-symbols-outlined animate-spin text-primary">sync</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="w-full space-y-4">
+                                <div class="flex flex-col text-center">
+                                    <span class="text-base uppercase tracking-widest text-primary/70 font-bold">Ngân hàng</span>
+                                    <span class="text-base font-bold text-primary">Vietcombank</span>
+                                </div>
+                                <div class="flex flex-col text-center">
+                                    <span class="text-base uppercase tracking-widest text-primary/70 font-bold">Số tài khoản</span>
+                                    <span class="text-base font-serif tracking-widest font-bold text-primary">0889 717 713</span>
+                                </div>
+                                <div class="flex flex-col text-center">
+                                    <span class="text-base uppercase tracking-widest text-primary/70 font-bold">Chủ tài khoản</span>
+                                    <span class="text-base font-serif font-bold uppercase text-primary">NGUYEN VAN CHON</span>
+                                </div>
+                                <div class="flex flex-col text-center border-t border-primary/20 pt-4">
+                                    <span class="text-base uppercase tracking-widest text-primary/70 font-bold">Nội dung chuyển khoản</span>
+                                    <span id="checkout-transfer-content" class="text-base font-bold text-primary">...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- CTA Button -->
+            <button id="confirm-btn"
+                class="hidden w-full bg-primary hover:bg-gradient-to-r hover:from-[#C8A96A] hover:via-[#E8D399] hover:to-[#C8A96A] hover:text-graphite text-ivory font-serif italic tracking-wider font-bold py-4 rounded-lg transition-all duration-500 shadow-xl active:scale-95 flex items-center justify-center gap-2">
+                <span>Tôi đã chuyển khoản - Gửi Biên Lai Zalo</span>
+                <span class="material-symbols-outlined">send</span>
+            </button>
+            <p class="mt-4 text-[10px] text-center text-primary italic opacity-60">
+                * Xác nhận sẽ được gửi qua Zalo ngay sau khi hệ thống ghi nhận.
+            </p>
+        </div>
+    </main>
+    <!-- Bottom Navigation Bar -->
+    <nav class="border-t border-primary/10 bg-background-light dark:bg-background-dark px-4 pb-6 pt-2">
+        <div class="flex gap-2">
+            <a class="flex flex-1 flex-col items-center justify-end gap-1 text-primary/60" href="index.html">
+                <span class="material-symbols-outlined">home</span>
+                <p class="text-[10px] font-medium leading-normal tracking-wide">Trang chủ</p>
+            </a>
+            <a class="flex flex-1 flex-col items-center justify-end gap-1 text-primary" href="rooms.html">
+                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1">calendar_month</span>
+                <p class="text-[10px] font-medium leading-normal tracking-wide">Đặt phòng</p>
+            </a>
+            <a class="flex flex-1 flex-col items-center justify-end gap-1 text-primary/60" href="#">
+                <span class="material-symbols-outlined">notifications</span>
+                <p class="text-[10px] font-medium leading-normal tracking-wide">Thông báo</p>
+            </a>
+            <a class="flex flex-1 flex-col items-center justify-end gap-1 text-primary/60" href="#">
+                <span class="material-symbols-outlined">person</span>
+                <p class="text-[10px] font-medium leading-normal tracking-wide">Cá nhân</p>
+            </a>
+        </div>
+    </nav>
+    <!-- Subtle Toast Placeholder (Hidden) -->
+    <div id="toast-message"
+        class="fixed bottom-24 left-1/2 -translate-x-1/2 text-primary bg-background-light px-6 py-3 rounded-full text-[11px] font-bold opacity-0 pointer-events-none transition-opacity duration-300 shadow-xl border border-primary/50 text-center w-5/6">
+    </div>
+
+    <script src="checkout.js"></script>
+
+    <!-- Floating Contact Action Button -->
+    <div id="floating-contact-container" class="fixed bottom-24 right-2 z-50 flex items-center justify-end">
+        <!-- Hidden sliding icons -->
+        <div id="contact-icons-slide"
+            class="flex items-center gap-3 mr-4 opacity-0 translate-x-10 pointer-events-none transition-all duration-300 ease-out">
+            <!-- Phone Button -->
+            <a href="tel:0889717713"
+                class="group relative flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-xl border-2 border-primary transition-transform hover:scale-110">
+                <span class="material-symbols-outlined text-primary text-2xl">call</span>
+            </a>
+
+            <!-- Fanpage Button -->
+            <a href="https://www.facebook.com/profile.php?id=61575491687268" target="_blank"
+                class="group relative flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-xl border-2 border-primary transition-transform hover:scale-110">
+                <svg class="h-6 w-6 fill-[#1877F2]" viewBox="0 0 24 24">
+                    <path
+                        d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                </svg>
+            </a>
+
+            <!-- Zalo Button -->
+            <a href="https://zalo.me/0889717713" target="_blank"
+                class="group relative flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-xl border-2 border-primary transition-transform hover:scale-110">
+                <img class="h-7 w-7 object-contain"
+                    src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Icon_of_Zalo.svg/1200px-Icon_of_Zalo.svg.png"
+                    alt="Zalo" />
+            </a>
+        </div>
+
+        <!-- Main Toggle Button -->
+        <button id="contact-toggle-btn"
+            class="group relative flex h-12 w-12 flex-col items-center justify-center rounded-full bg-primary text-white shadow-xl border-2 border-white transition-transform hover:scale-105 z-10">
+            <span class="material-symbols-outlined text-[20px] leading-none mb-0.5">forum</span>
+            <span class="text-[8px] font-bold uppercase tracking-wider leading-none">Liên Hệ</span>
+        </button>
+    </div>
+
+    <!-- Script to handle floating contact toggle -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('floating-contact-container');
+            const toggleBtn = document.getElementById('contact-toggle-btn');
+            const slidePanel = document.getElementById('contact-icons-slide');
+
+            let isOpen = false;
+
+            const toggleContactMenu = (e) => {
+                if (e) {
+                    e.stopPropagation();
+                }
+                isOpen = !isOpen;
+                if (isOpen) {
+                    slidePanel.classList.remove('opacity-0', 'translate-x-10', 'pointer-events-none');
+                    slidePanel.classList.add('opacity-100', 'translate-x-0', 'pointer-events-auto');
+                } else {
+                    slidePanel.classList.remove('opacity-100', 'translate-x-0', 'pointer-events-auto');
+                    slidePanel.classList.add('opacity-0', 'translate-x-10', 'pointer-events-none');
+                }
+            };
+
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', toggleContactMenu);
+            }
+
+            document.addEventListener('click', (event) => {
+                if (isOpen && container && !container.contains(event.target)) {
+                    toggleContactMenu();
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>
