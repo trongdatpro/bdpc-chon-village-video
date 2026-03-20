@@ -298,7 +298,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         scheduleResponses.forEach((scheduleRes) => {
             if (!scheduleRes || !scheduleRes.table || !scheduleRes.table.rows) return;
-            
+
             scheduleRes.table.rows.forEach(row => {
                 if (!row.c || row.c.length < 3) return;
                 const val = row.c[0] ? row.c[0].v : null;
@@ -326,7 +326,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
 
                 const cleanRid = String(rId).trim().replace(/ /g, '_');
-                
+
                 // Extraction helper for numeric/formatted values
                 const getVal = (cell, def = 0) => {
                     if (!cell) return def;
@@ -366,19 +366,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             curr.setDate(curr.getDate() + 1);
         }
 
+        const totalGuests = adults + children;
         let allowedRooms = localRooms;
-        if (adults >= 3) {
+
+        // Special recommendation: children under 6 are best suited for Green_Room
+        // But we only enforce it if they fit in 1 room (<= 3 people total)
+        // If > 3 people, they need multiple rooms, so we show everything.
+        if (isUnder6 && totalGuests <= 3) {
+            allowedRooms = localRooms.filter(r => r.id === 'Green_Room');
+        } else {
             allowedRooms = localRooms;
-        } else if (adults === 2 && children === 1) {
-            if (isUnder6) {
-                allowedRooms = localRooms.filter(r => r.id === 'Green_Room');
-            } else {
-                allowedRooms = localRooms;
-            }
-        } else if (adults === 2 && children >= 2) {
-            allowedRooms = localRooms.filter(r => r.id === 'Green_Room');
-        } else if (children > 0 && isUnder6) {
-            allowedRooms = localRooms.filter(r => r.id === 'Green_Room');
         }
 
         roomsContainer.innerHTML = '';
@@ -436,11 +433,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
+        const totalGuests = adults + children;
+
         roomsList.forEach(room => {
             // Assessment and Multi-night Price Calculation
             let isAvailable = true;
             let totalRoomBasePrice = 0;
-            let isHolidayStay = false; 
+            let isHolidayStay = false;
             let roomImg = room.img;
 
             // 1. Check if room is available for ALL days and sum the price
@@ -457,7 +456,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
 
                 const roomDayData = (pricingData[room.id] && pricingData[room.id][dateStr]) || {};
-                
+
                 // Track if any night in the stay is a holiday
                 const dayNote = (roomDayData.note || "").toLowerCase().normalize("NFC");
                 const isDayHoliday = /l[ễễe]/.test(dayNote) || dayNote.includes("holiday");
@@ -513,19 +512,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             if (bookedOnTargetNight) return; // HIDDEN if actually booked
-            
+
             // 2. Fetch Display Data from first stay night (or fallback)
             const firstDate = datesToStay[0];
             const firstDateStr = getStr(firstDate);
             const roomDayData = (pricingData[room.id] && pricingData[room.id][firstDateStr]) || (pricingData[room.id] && pricingData[room.id]['default']) || {};
-            
+
             // Reference prices for display logic
             const baseWeekday = roomDayData.weekday || 800000;
             const baseWeekend = roomDayData.weekend || 1000000;
 
             const isHoliday = isHolidayStay;
             if (isHoliday) console.log(`[DEBUG] Final decision for ${room.id}: HOLIDAY DISPLAY ACTIVE`);
-            
+
             const maxAdults = roomDayData.maxAdults !== undefined ? roomDayData.maxAdults : 2;
             const maxChildren = roomDayData.maxChildren !== undefined ? roomDayData.maxChildren : 2;
             const kidsUnder6Allowed = roomDayData.kidsUnder6 || "Yes";
@@ -565,22 +564,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (isWithinPeriod || isGapFiller) {
                     isAvailable = true;
-                    // Run child capacity checks even if it's 1-night
-                    if (children > 0) {
+                    // Capacity check for 1 room stay
+                    if (totalGuests <= 3) {
                         if (isUnder6 && kidsUnder6Allowed.toLowerCase() === "no") isAvailable = false;
-                        if (children > maxChildren) isAvailable = false;
+                        if (adults > maxAdults || children > maxChildren) isAvailable = false;
                     }
                 } else {
                     isAvailable = false;
                     uiLog(`Room ${room.id}: Hidden (1-Night Not In Period & Checkout Not Booked)`);
                 }
-            } else if (isWithinPeriod) {
-                // OK - Multiple nights within period
             } else {
-                // Multiple nights outside period -> Capacity checks
-                if (children > 0) {
+                // All other stays: Check capacity for small groups, allow all others to see rooms for multi-booking
+                if (totalGuests <= 3) {
                     if (isUnder6 && kidsUnder6Allowed.toLowerCase() === "no") isAvailable = false;
-                    if (children > maxChildren) isAvailable = false;
+                    if (adults > maxAdults || children > maxChildren) isAvailable = false;
                 }
             }
 
@@ -604,7 +601,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             `).join('');
 
             const isAlreadySelected = selectedRooms.some(r => String(r.id) === String(room.id));
-            
+
             // Determine Surcharge for display and for selection
             // If nights >= 3, use standard (weekday) surcharge
             let selectedSurcharge = roomDayData.surcharge || 450000;
@@ -623,7 +620,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Pricing Breakdown Display
             let priceHtml = "";
             const formatDateShort = (d) => `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`;
-            
+
             priceHtml = `
                 <div class="flex flex-col gap-0.5 -ml-3">
                     <p class="text-[11px] text-slate-400 uppercase tracking-tight mb-1">Giá Niêm Yết</p>
@@ -640,11 +637,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <span class="text-[15px] font-bold text-graphite leading-none">${renderCurrency(baseWeekend)}</span>
                         <span class="text-[12px] font-normal text-slate-500">/ Đêm Cuối Tuần (Thứ 6 - Chủ Nhật)</span>
                     </div>`;
-                
+
                 // Show holiday nights if any in stay
                 groupedNights.forEach(group => {
                     if (group.isHoliday) {
-                        const dateLabel = group.count > 1 
+                        const dateLabel = group.count > 1
                             ? `Giá Ngày ${formatDateShort(group.startDate)}-${formatDateShort(group.endDate)} :`
                             : `Giá Ngày Lễ ${formatDateShort(group.startDate)} :`;
                         priceHtml += `
@@ -658,7 +655,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 // SAME: Show dates for stay (Image 3)
                 priceHtml += groupedNights.map(group => {
-                    const dateLabel = group.count > 1 
+                    const dateLabel = group.count > 1
                         ? `Giá Ngày ${formatDateShort(group.startDate)}-${formatDateShort(group.endDate)} :`
                         : `Giá ${group.isHoliday ? 'Ngày Lễ ' : 'Ngày '}${formatDateShort(group.startDate)} :`;
                     return `
@@ -678,17 +675,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             const buttonHtml = `
                     <div class="relative p-[3px] rounded-xl bg-gradient-to-b from-[#BF953F] via-[#FCF6BA] to-[#AA771C] shadow-lg shadow-black/20 group/btn active:scale-95 transition-transform duration-300">
                         <div class="p-[1px] rounded-[9px] bg-gradient-to-b from-[#AA771C] via-[#FCF6BA] to-[#BF953F]">
-                            <button data-room-id="${room.id}" onclick='selectRoom(this, ${JSON.stringify({ 
-                                id: room.id, 
-                                name: room.name, 
-                                img: roomImg, 
-                                baseRoomTotal: totalRoomBasePrice, 
-                                nights: datesToStay.length,
-                                surcharge: selectedSurcharge,
-                                baseWeekday: baseWeekday,
-                                baseWeekend: baseWeekend,
-                                groupedNights: groupedNights.map(g => ({...g, startDate: formatDateShort(g.startDate), endDate: formatDateShort(g.endDate)}))
-                            })})' 
+                            <button data-room-id="${room.id}" onclick='selectRoom(this, ${JSON.stringify({
+                id: room.id,
+                name: room.name,
+                img: roomImg,
+                baseRoomTotal: totalRoomBasePrice,
+                nights: datesToStay.length,
+                surcharge: selectedSurcharge,
+                baseWeekday: baseWeekday,
+                baseWeekend: baseWeekend,
+                groupedNights: groupedNights.map(g => ({ ...g, startDate: formatDateShort(g.startDate), endDate: formatDateShort(g.endDate) }))
+            })})' 
                                 class="${isAlreadySelected ? 'bg-[#A0824B] text-white pointer-events-none' : 'bg-primary text-white'} hover:bg-[#A0824B] font-sans tracking-wider font-bold text-[15px] sm:text-[16px] py-2.5 px-8 rounded-[8px] transition-all duration-500 flex items-center justify-center leading-none uppercase w-full whitespace-nowrap">
                                 ${isAlreadySelected ? 'Đã Chọn' : 'Chọn Phòng'}
                             </button>
@@ -780,7 +777,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        const roomsNeeded = Math.ceil(adults / 2);
+        const roomsNeeded = Math.ceil(totalGuests / 3);
 
         if (availableRoomsCount === 0) {
             if (availableRoomsMessage) availableRoomsMessage.classList.add('hidden');
@@ -801,15 +798,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
             if (availableRoomsMessage) availableRoomsMessage.classList.remove('hidden');
 
-            if (isWithinPeriod && availableRoomsCount < roomsNeeded) {
-                // New Capacity Alert Requirement: Show rooms AND message below
+            if (availableRoomsCount < roomsNeeded) {
+                // New Capacity Alert Requirement: Show rooms AND message below (Now correctly includes children)
                 const alertDiv = document.createElement('div');
                 alertDiv.id = "capacity-alert";
                 alertDiv.className = "col-span-full flex flex-col items-center justify-center space-y-4 mt-8 mb-16 animate-shake animate-pop bg-[#FAF6EC] p-8 rounded-xl border-2 border-primary/20";
                 alertDiv.innerHTML = `
                     <span class="material-symbols-outlined text-4xl text-primary">group_off</span>
                     <p class="text-center text-[#c8a96a] font-display italic text-xl px-4">
-                        Hiện tại chỉ còn ${availableRoomsCount} phòng đơn đủ cho ${availableRoomsCount * 2} khách. <br class="hidden sm:block"> Xin vui lòng liên hệ Zalo để được hỗ trợ chi tiết.
+                        Hiện tại chỉ còn ${availableRoomsCount} phòng đơn đủ cho tối đa ${availableRoomsCount * 3} khách (bao gồm cả trẻ em). <br class="hidden sm:block"> Xin vui lòng liên hệ Zalo để được hỗ trợ chi tiết.
                     </p>
                     <a href="https://zalo.me/0889717713" target="_blank" class="mt-4 bg-primary text-white py-2 px-6 rounded-lg font-bold shadow-lg hover:scale-105 transition-transform uppercase text-sm">
                         Liên hệ Zalo
@@ -878,7 +875,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    const openModal = () => {
+    const openModal = (isPopState = false) => {
+        if (!isPopState) {
+            history.pushState({ view: 'booking-modal' }, '');
+        }
+
         if (checkinInput) checkinInput.value = bookingData.checkin;
         if (checkoutInput) checkoutInput.value = bookingData.checkout;
         adultCountLocal = parseInt(bookingData.adults) || 2;
@@ -905,8 +906,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    const closeModal = () => {
+    const closeModal = (isPopState = false) => {
         if (modal) {
+            if (!isPopState && history.state && history.state.view === 'booking-modal') {
+                history.back();
+            }
             modal.classList.add('opacity-0');
             if (modalContent) modalContent.classList.add('translate-y-full');
             setTimeout(() => {
@@ -915,6 +919,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }, 300);
         }
     };
+    window.closeModal = closeModal;
 
     const minusAdult = document.getElementById('modal-minus-adult');
     const plusAdult = document.getElementById('modal-plus-adult');
@@ -999,7 +1004,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             const getStr = d => {
                                 const yy = d.getFullYear(); const mm = String(d.getMonth() + 1).padStart(2, '0'); const dd = String(d.getDate()).padStart(2, '0');
                                 return `${yy}-${mm}-${dd}`;
-                                };
+                            };
                             const ciStr = getStr(ciDate);
                             const coStr = getStr(coDate);
 
@@ -1135,16 +1140,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         confirmBtn.addEventListener('click', (e) => {
             if (selectedRooms.length === 0) return;
 
-            // --- CAPACITY VALIDATION (Adults only as per request) ---
-            const totalAdults = adults;
-            const totalCapacity = selectedRooms.length * 3; // Max 3 adults per room
+            // --- CAPACITY VALIDATION (Total Guests: Adults + Children) ---
+            const totalGuestsCount = (typeof adults !== 'undefined' ? adults : 2) + (typeof children !== 'undefined' ? children : 0);
+            const totalCapacity = selectedRooms.length * 3; // Max 3 guests total per room
             const warningEl = document.getElementById('waitlist-booking-warning');
 
-            if (totalAdults > totalCapacity) {
+            if (totalGuestsCount > totalCapacity) {
                 // Prevent global click listener from hiding it immediately on second click
                 e.stopPropagation();
 
                 if (warningEl) {
+                    warningEl.textContent = "Vượt quá quy định. Mỗi phòng chỉ ở tối đa 3 khách, có thu phí theo thông tin phòng.";
                     warningEl.classList.remove('hidden');
                     // Sync with triggerModalWarningEffect behavior
                     warningEl.classList.add('animate-shake', 'animate-pop');
@@ -1152,14 +1158,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     void warningEl.offsetWidth;
                     warningEl.style.animation = '';
 
-                    // Auto-hide after 3 seconds (Reset timer on every click)
+                    // Auto-hide after 5 seconds (Reset timer on every click)
                     if (window.waitlistWarningTimeout) clearTimeout(window.waitlistWarningTimeout);
                     window.waitlistWarningTimeout = setTimeout(() => {
                         warningEl.classList.add('hidden');
-                    }, 3000);
+                    }, 5000);
 
                     // Click anywhere to hide immediately (one-time listener)
-                    // We only add it if it's not already visible to avoid multiple listeners
                     if (!window.isWaitlistWarningActive) {
                         window.isWaitlistWarningActive = true;
                         const hideNow = () => {
@@ -1296,6 +1301,12 @@ window.selectRoom = function (btn, roomData) {
     const isAlreadyIn = selectedRooms.some(r => String(r.id) === String(roomData.id));
     if (isAlreadyIn) return;
 
+    // 2. Capacity Validation for single room
+    const totalGuestsSelect = (typeof adults !== 'undefined' ? adults : 2) + (typeof children !== 'undefined' ? children : 0);
+    if (totalGuestsSelect > 3 && selectedRooms.length === 0) {
+        alert("Vượt quá quy định. Mỗi phòng chỉ ở tối đa 3 khách, có thu phí theo thông tin phòng.");
+    }
+
     // 2. Chuyển nút sang trạng thái "Đã chọn" ngay lập tức
     btn.textContent = 'ĐÃ CHỌN';
     btn.classList.add('bg-[#A0824B]', 'pointer-events-none');
@@ -1305,7 +1316,7 @@ window.selectRoom = function (btn, roomData) {
     // Include surcharge and notes for checkout page calculation
     // SPECIAL RULE: If stay >= 3 nights (4 days 3 nights), the surcharge is already handled or we use roomData.surcharge
     let finalSurcharge = roomData.surcharge || 450000;
-    
+
     if (roomData.nights >= 3) {
         console.log(`[DEBUG] Stay >= 3 nights (${roomData.nights}). Surcharge used: ${finalSurcharge}`);
     }
@@ -1448,7 +1459,7 @@ function renderReviews(reviews) {
                         <span class="text-slate-500 font-bold text-[10px] uppercase">${label}</span>
                         <span class="text-graphite font-bold text-[13px]">${val}</span>
                     </div>`;
-        };  
+        };
 
         const hasScores = r.roomScore || r.serviceScore || r.locationScore;
         const scoreRow = hasScores ? `
@@ -1548,12 +1559,17 @@ function renderReviews(reviews) {
     }, 100);
 }
 
-function openGallery(roomId) {
+function openGallery(roomId, isPopState = false) {
     const media = window.galleryData[roomId];
     if (!media || media.length === 0) {
         console.warn("No gallery data for room:", roomId);
         return;
     }
+
+    if (!isPopState) {
+        history.pushState({ view: 'gallery-grid', roomId: roomId }, '');
+    }
+
     currentGallery = media;
     currentRoomId = roomId;
     currentGalleryIndex = 0;
@@ -1698,10 +1714,14 @@ function renderGalleryGrid() {
     `;
 }
 
-function openDetail(index) {
+function openDetail(index, isPopState = false) {
     const gridView = document.getElementById('grid-view');
     const detailView = document.getElementById('detail-view');
     if (!gridView || !detailView) return;
+
+    if (!isPopState) {
+        history.pushState({ view: 'gallery-detail', index: index, roomId: currentRoomId }, '');
+    }
 
     gridView.style.display = 'none';
     detailView.classList.add('active');
@@ -1709,7 +1729,10 @@ function openDetail(index) {
     updateDetailDisplay();
 }
 
-function showGrid() {
+function showGrid(isPopState = false) {
+    if (!isPopState && history.state && history.state.view === 'gallery-detail') {
+        history.back();
+    }
     renderGalleryGrid();
 }
 
@@ -1800,9 +1823,12 @@ function jumpToGallery(index) {
     updateDetailDisplay();
 }
 
-function closeGallery() {
+function closeGallery(isPopState = false) {
     const modal = document.getElementById('room-gallery-modal');
     if (modal) {
+        if (!isPopState && history.state && (history.state.view === 'gallery-grid' || history.state.view === 'gallery-detail')) {
+            history.back();
+        }
         modal.classList.remove('active');
         document.body.style.overflow = 'auto';
         const container = document.getElementById('detail-media-container');
@@ -1829,8 +1855,39 @@ window.jumpToGallery = jumpToGallery;
 window.showGrid = showGrid;
 window.openDetail = openDetail;
 
+// --- BACK BUTTON HANDLING (History API) ---
+window.addEventListener('popstate', (event) => {
+    const state = event.state;
+    const bookingModal = document.getElementById('edit-booking-modal');
+    const galleryModal = document.getElementById('room-gallery-modal');
+
+    // Handle Booking Modal
+    if (!state || state.view !== 'booking-modal') {
+        if (bookingModal && !bookingModal.classList.contains('hidden')) {
+            if (window.closeModal) window.closeModal(true);
+        }
+    }
+
+    // Handle Gallery
+    if (!state) {
+        if (galleryModal && galleryModal.classList.contains('active')) {
+            window.closeGallery(true);
+        }
+    } else if (state.view === 'gallery-grid') {
+        if (galleryModal && galleryModal.classList.contains('active')) {
+            window.showGrid(true);
+        } else if (state.roomId) {
+            window.openGallery(state.roomId, true);
+        }
+    } else if (state.view === 'gallery-detail') {
+        if (galleryModal && galleryModal.classList.contains('active')) {
+            window.openDetail(state.index, true);
+        }
+    }
+});
+
 // Gọi loadReview sau khi page load
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("Rooms script v11.16 loaded and active (Final Policy Fix).");
+    console.log("Rooms script v11.17 loaded and active (Back Button Fix).");
     setTimeout(loadReviews, 500);
 });

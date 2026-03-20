@@ -11,41 +11,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. Check for PayOS Return Parameters
     const urlParams = new URLSearchParams(window.location.search);
     const status = urlParams.get('status');
-    const orderCode = urlParams.get('orderCode');
-
-    if (status === 'PAID') {
-        console.log("Payment Successful! Order Code:", orderCode);
-        
-        // Hide everything else
-        const mainContent = document.querySelector('main > div.molding-border');
-        if (mainContent) {
-            // Hide all children except header/footer if needed, but here we hide sections
-            document.querySelectorAll('main > div.molding-border > div, main > div.molding-border > button, main > div.molding-border > p').forEach(el => {
-                if (el.id !== 'success-section') el.classList.add('hidden');
-            });
-        }
-
-        const successSection = document.getElementById('success-section');
-        const successOrderCode = document.getElementById('success-order-code');
-        
-        if (successSection) {
-            successSection.classList.remove('hidden');
-            setTimeout(() => successSection.classList.remove('opacity-0'), 10);
-        }
-        if (successOrderCode) successOrderCode.textContent = orderCode || 'N/A';
-
-        // Clear Session
-        sessionStorage.removeItem('chonVillageBooking');
-        sessionStorage.removeItem('chonVillageSelectedRooms');
-        sessionStorage.removeItem('chonVillageSelectedRoom');
-        
-        return; // Stop further initialization
-    }
+    const orderCodeFromUrl = urlParams.get('orderCode');
 
     // 3. Retrieve Data From Session
     const bookingDataStr = sessionStorage.getItem('chonVillageBooking');
     const selectedRoomsStr = sessionStorage.getItem('chonVillageSelectedRooms');
-    const selectedRoomStr = sessionStorage.getItem('chonVillageSelectedRoom'); // Fallback for single room
+    const selectedRoomStr = sessionStorage.getItem('chonVillageSelectedRoom');
 
     if (!bookingDataStr || (!selectedRoomsStr && !selectedRoomStr)) {
         console.warn("Booking data not found in session, redirecting...");
@@ -145,94 +116,89 @@ document.addEventListener('DOMContentLoaded', () => {
     const roomsListContainer = document.getElementById('checkout-rooms-list');
     if (roomsListContainer) {
         roomsListContainer.innerHTML = roomsWithTotals.map(room => {
-            const avgNightPrice = Math.round(room.basePrice / nights);
             return `
                 <div class="border border-primary/40 p-6 rounded-xl bg-background-light/80 shadow-md relative overflow-hidden">
-                    <!-- Room Image -->
                     <div class="w-full h-56 bg-center bg-cover rounded-lg mb-6 border-2 border-primary/20"
                         style="background-image: url('${room.img}');">
                     </div>
-                    
                     <h3 class="text-2xl font-serif font-bold mb-4 text-black border-b-2 border-primary/30 pb-3">${room.name}</h3>
-                    
                     <div class="space-y-4">
                         <div class="flex flex-col gap-0.5">
                             <span class="text-black text-sm font-medium italic">Thời gian:</span>
                             <span class="text-black text-sm font-bold leading-tight">Ngày Nhận ${formatDateObj(checkinDate)} - Ngày Trả ${formatDateObj(checkoutDate)} - ${nights + 1} ngày ${nights} đêm</span>
                         </div>
-                        
                         <div class="flex flex-col gap-2 py-4 border-b-2 border-t-2 border-dashed border-primary/40">
-                            <span class="text-black text-sm uppercase tracking-wider font-bold">Chi tiết giá phòng:</span>
+                            <span class="text-black text-sm uppercase tracking-wider font-bold">Chi tiết giá:</span>
                             <div class="space-y-3">
-                                ${(() => {
-                                    const baseWeekday = room.baseWeekday;
-                                    const baseWeekend = room.baseWeekend;
-                                    
-                                    if (baseWeekday && baseWeekend && baseWeekday !== baseWeekend) {
-                                        let html = `
-                                            <div class="flex flex-col text-sm">
-                                                <span class="text-black font-bold mt-0.5">${renderCurrency(baseWeekday)} / Đêm Trong Tuần (Thứ 2 - Thứ 5)</span>
-                                            </div>
-                                            <div class="flex flex-col text-sm">
-                                                <span class="text-black font-bold mt-0.5">${renderCurrency(baseWeekend)} / Đêm Cuối Tuần (Thứ 6 - Chủ Nhật)</span>
-                                            </div>`;
-                                        
-                                        // Add Holiday lines if any
-                                        if (room.groupedNights) {
-                                            room.groupedNights.forEach(group => {
-                                                if (group.isHoliday) {
-                                                    const dateLabel = group.count > 1 
-                                                        ? `Giá Ngày ${group.startDate}-${group.endDate}:`
-                                                        : `Giá Ngày Lễ ${group.startDate}:`;
-                                                    html += `
-                                                        <div class="flex flex-col text-sm">
-                                                            <span class="text-black">${dateLabel}</span>
-                                                            <span class="text-black font-bold mt-0.5">${renderCurrency(group.price)} / Đêm</span>
-                                                        </div>`;
-                                                }
-                                            });
-                                        }
-                                        return html;
-                                    } else {
-                                        // SAME or Fallback
-                                        return (room.groupedNights || []).map(group => {
-                                            const dateLabel = group.count > 1 
-                                                ? `Giá Ngày ${group.startDate}-${group.endDate}:`
-                                                : `Giá ${group.isHoliday ? 'Ngày Lễ ' : 'Ngày '}${group.startDate}:`;
-                                            return `
-                                                <div class="flex flex-col text-sm">
-                                                    <span class="text-black">${dateLabel}</span>
-                                                    <span class="text-black font-bold mt-0.5">${renderCurrency(group.price)} / Đêm</span>
-                                                </div>
-                                            `;
-                                        }).join('') || `
-                                            <div class="flex flex-col text-sm">
-                                                <span class="text-black">Giá Trung Bình:</span>
-                                                <span class="text-black font-bold mt-0.5">${renderCurrency(Math.round(room.basePrice / nights))} / Đêm</span>
-                                            </div>`;
-                                    }
-                                })()}
+                                <div class="flex flex-col text-sm">
+                                    <span class="text-black font-bold mt-0.5">Giá phòng: ${renderCurrency(room.basePrice)}</span>
+                                </div>
+                                ${room.surchargeAllocated > 0 ? `
+                                <div class="flex flex-col text-sm">
+                                    <span class="text-black font-bold mt-0.5">Phụ thu: ${renderCurrency(room.surchargeAllocated)}</span>
+                                </div>` : ''}
                             </div>
                         </div>
-
-                        ${room.surchargeAllocated > 0 ? `
-                        <div class="flex justify-between items-center py-2 border-b-2 border-dashed border-primary/40">
-                            <span class="text-black text-sm font-medium">Phụ thu khách thứ 3:</span>
-                            <span class="text-black text-sm font-bold">${renderCurrency(room.surchargePerNight)} / Đêm</span>
-                        </div>` : ''}
-
-                        <div class="flex justify-between items-center pt-2 text-primary">
-                            <span class="text-base font-serif font-bold">Tổng cộng:</span>
-                            <span class="text-base font-serif font-bold tracking-tight">${renderCurrency(room.total)}</span>
+                        <div class="flex justify-between items-center pt-2 text-primary font-bold">
+                            <span>TỔNG CỘNG:</span>
+                            <span>${renderCurrency(room.total)}</span>
                         </div>
                     </div>
-                </div>
-            `;
+                </div>`;
         }).join('');
     }
 
     setSafeText('checkout-total', renderCurrency(grandTotalAmount));
     setSafeText('checkout-deposit', renderCurrency(grandTotalAmount >= 0 ? depositAmount : 0));
+
+    // Define success function using declaration for hoisting
+    function handlePaymentSuccess(orderCode) {
+        console.log("Executing handlePaymentSuccess for:", orderCode);
+        
+        // Ensure summary and payment sections are visible if they were hidden
+        const summarySection = document.getElementById('summary-section');
+        const paymentSection = document.getElementById('payment-section');
+        if (summarySection) {
+            summarySection.classList.remove('hidden');
+            summarySection.classList.remove('opacity-0');
+        }
+        if (paymentSection) {
+            paymentSection.classList.remove('hidden');
+            paymentSection.classList.remove('opacity-0');
+        }
+
+        // Hide QR loading & QR image
+        const qrLoading = document.getElementById('qr-loading');
+        const qrImg = document.getElementById('checkout-qr');
+        const actionBtns = document.querySelector('#payment-section .grid.grid-cols-2');
+        
+        if (qrLoading) qrLoading.classList.add('hidden');
+        if (qrImg) qrImg.classList.add('hidden');
+        if (actionBtns) actionBtns.classList.add('hidden');
+
+        // Show Success Overlay inside Payment Section
+        const successOverlay = document.getElementById('payment-success-overlay');
+        if (successOverlay) {
+            successOverlay.classList.remove('hidden');
+            setTimeout(() => {
+                successOverlay.classList.remove('opacity-0');
+                successOverlay.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 50);
+        }
+
+        // Clear Session for booking safety
+        sessionStorage.removeItem('chonVillageBooking');
+        sessionStorage.removeItem('chonVillageSelectedRooms');
+        sessionStorage.removeItem('chonVillageSelectedRoom');
+    }
+    window.handlePaymentSuccess = handlePaymentSuccess;
+
+    // Trigger success logic if URL says PAID (Case-insensitive)
+    const isUrlPaid = status && status.toUpperCase() === 'PAID';
+    if (isUrlPaid) {
+        console.log("Payment Successful (Reload/Redirect detected)!");
+        handlePaymentSuccess(orderCodeFromUrl);
+    }
 
     // 6. visibility & Agreement Logic
     const agreeCheckbox = document.getElementById('agree-checkbox');
@@ -260,6 +226,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const isChecked = e.target.checked;
             
             if (isChecked) {
+                const apiBase = (window.location.protocol === 'file:') ? 'http://localhost:3000' : '';
+                console.log("[API] Using base:", apiBase || '(relative)');
+
                 // Show Summary & Payment
                 if (summarySection) {
                     summarySection.classList.remove('hidden');
@@ -278,7 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Call PayOS Backend Automatically
                     try {
                         console.log("Creating PayOS link...");
-                        const response = await fetch('http://localhost:3000/create-payment-link', {
+                        const response = await fetch(`${apiBase}/create-payment-link`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -291,6 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (!response.ok) throw new Error(data.error || "Lỗi kết nối Server");
 
                         payosData = data;
+                        console.log("PayOS Link Created:", payosData.orderCode);
 
                         if (payosData.qrCode) {
                             const qrImg = document.getElementById('checkout-qr');
@@ -309,14 +279,21 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (accountNoEl) accountNoEl.textContent = payosData.accountNumber;
                             if (accountNameEl) accountNameEl.textContent = payosData.accountName;
                             if (transferBtn) {
-                                transferBtn.href = payosData.checkoutUrl;
+                                transferBtn.href = payosData.checkoutUrl || '#';
                                 transferBtn.innerHTML = '<span class="material-symbols-outlined text-sm">rocket_launch</span><span>Chuyển khoản</span>';
+                            }
+
+                            // 3. Start Polling for status (Use ID for v2)
+                            const pollId = payosData.id || payosData.orderCode;
+                            if (pollId) {
+                                console.log("Starting polling for:", pollId);
+                                startPaymentPolling(pollId);
                             }
                         } else {
                             throw new Error("PayOS không trả về mã QR. Hãy kiểm tra Dashboard.");
                         }
                     } catch (err) {
-                        console.error("PayOS Error:", err);
+                        console.error("PayOS Fetch Error:", err);
                         const qrLoading = document.getElementById('qr-loading');
                         if (qrLoading) {
                             qrLoading.innerHTML = `
@@ -324,7 +301,6 @@ document.addEventListener('DOMContentLoaded', () => {
                                     <span class="material-symbols-outlined text-red-500 text-3xl">error</span>
                                     <span class="text-[10px] text-red-500 font-bold uppercase tracking-tight">Lỗi Kết Nối PayOS</span>
                                     <p class="text-[9px] text-slate-500 text-center leading-tight">${err.message}</p>
-                                    <p class="text-[8px] text-primary underline mt-1">Gợi ý: Kiểm tra Kênh thanh toán & Checksum Key</p>
                                 </div>
                             `;
                         }
@@ -354,13 +330,213 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 7. Copy & Transfer button logic
+    // 7. Polling & Success Flow Logic
+    let pollingInterval = null;
+    const statusIndicator = document.getElementById('payment-status-indicator');
+    const statusText = document.getElementById('payment-status-text');
+    const manualBtn = document.getElementById('manual-check-btn');
+
+    const checkStatusOnce = async (orderCode) => {
+        try {
+            const apiBase = (window.location.protocol === 'file:') ? 'http://localhost:3000' : '';
+            console.log(`[POLLING] Fetching status for ${orderCode}...`);
+            const res = await fetch(`${apiBase}/get-order/${orderCode}`);
+            
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                console.error("[POLLING] Server Error:", res.status, errorData);
+                return { paid: false, status: `ERROR_${res.status}`, detail: errorData.error };
+            }
+            
+            const data = await res.json();
+            console.log(`[PAYOS DEBUG] Full data for ${orderCode}:`, data);
+            
+            const currentStatus = (data.status || "UNKNOWN").toUpperCase();
+            const isActuallyPaid = ['PAID', 'COMPLETED', 'SUCCESS'].includes(currentStatus);
+            
+            if (isActuallyPaid) {
+                console.log("!!! SUCCESS DETECTED !!! Status:", currentStatus);
+                if (pollingInterval) clearInterval(pollingInterval);
+                if (statusIndicator) statusIndicator.classList.add('hidden');
+                handlePaymentSuccess(orderCode);
+                return { paid: true, status: currentStatus };
+            }
+            
+            return { paid: false, status: currentStatus, data: data };
+        } catch (e) {
+            console.error("Check status exception:", e);
+            return { paid: false, status: "FETCH_FAILED", detail: e.message };
+        }
+    };
+
+    const startPaymentPolling = (orderCode) => {
+        if (pollingInterval) clearInterval(pollingInterval);
+        console.log("Started polling for order:", orderCode);
+        
+        // Show indicator after a short delay (so it doesn't flicker on instant success)
+        setTimeout(() => {
+            if (statusIndicator && !window.location.search.includes('status=PAID')) {
+                statusIndicator.classList.remove('hidden');
+                setTimeout(() => statusIndicator.classList.remove('opacity-0'), 10);
+            }
+        }, 2000);
+
+        pollingInterval = setInterval(async () => {
+            const result = await checkStatusOnce(orderCode);
+            if (result && result.paid && statusText) {
+                statusText.textContent = "Đã nhận thanh toán!";
+            } else if (result && result.status === 'CANCELLED') {
+                if (statusText) statusText.textContent = "Giao dịch đã bị hủy.";
+                clearInterval(pollingInterval);
+            }
+        }, 4000);
+
+        // Manual Check Button
+        if (manualBtn) {
+            manualBtn.onclick = async () => {
+                manualBtn.textContent = "Đang kiểm tra...";
+                const result = await checkStatusOnce(orderCode);
+                
+                if (result && result.paid) {
+                     manualBtn.textContent = "Đã nhận thanh toán!";
+                     // Success transition is handled inside checkStatusOnce
+                } else {
+                    const statusTextStr = (result && result.status) ? result.status : "Lỗi";
+                    manualBtn.textContent = `Chưa nhận được (Trạng thái: ${statusTextStr})`;
+                    console.log("[MANUAL CHECK] Result:", result);
+                    setTimeout(() => { manualBtn.textContent = "Kiểm tra lại ngay"; }, 4000);
+                }
+            };
+        }
+    };
+
+    // Protect handlePaymentSuccess with error logging
+    const originalHandlePaymentSuccess = window.handlePaymentSuccess;
+    window.handlePaymentSuccess = function(orderCode) {
+        console.log("--> Calling handlePaymentSuccess for order:", orderCode);
+        try {
+            if (originalHandlePaymentSuccess) {
+                originalHandlePaymentSuccess(orderCode);
+            } else {
+                console.error("handlePaymentSuccess is NOT defined on window!");
+            }
+        } catch (err) {
+            console.error("CRITICAL ERROR in handlePaymentSuccess:", err);
+            alert("Có lỗi khi tạo hóa đơn: " + err.message);
+        }
+    };
+
+    // 8. Info Collection & Bill Generation
+    const confirmInfoBtn = document.getElementById('confirm-info-btn');
+    const guestNameInput = document.getElementById('guest-fullname');
+    const guestZaloInput = document.getElementById('guest-zalo');
+    const infoForm = document.getElementById('info-collection-form');
+    const billContainer = document.getElementById('bill-result-container');
+    const billTextEl = document.getElementById('bill-text-content');
+    const copyBillBtn = document.getElementById('copy-bill-btn');
+
+    if (confirmInfoBtn) {
+        confirmInfoBtn.addEventListener('click', () => {
+            console.log("Confirm Info Clicked");
+            const name = guestNameInput ? guestNameInput.value.trim() : "Quý khách";
+            const phone = guestZaloInput ? guestZaloInput.value.trim() : "Chưa cung cấp";
+
+            if (!name || name === "Quý khách") {
+                alert("Vui lòng nhập tên người đặt phòng.");
+                return;
+            }
+
+            // Generate Bill Text
+            const billText = generateBillText(name, phone);
+            if (billTextEl) {
+                billTextEl.innerHTML = billText.replace(/\n/g, '<br/>');
+            }
+
+            // Show Bill
+            if (infoForm) infoForm.classList.add('hidden');
+            if (billContainer) {
+                billContainer.classList.remove('hidden');
+                setTimeout(() => {
+                    billContainer.classList.remove('opacity-0', 'translate-y-10');
+                    billContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 50);
+            }
+        });
+    }
+
+    const generateBillText = (name, zalo) => {
+        const currentTotal = typeof grandTotalAmount !== 'undefined' ? grandTotalAmount : 0;
+        const currentDeposit = typeof depositAmount !== 'undefined' ? depositAmount : 0;
+        const remaining = currentTotal - currentDeposit;
+        const nightsCount = typeof nights !== 'undefined' ? nights : 1;
+        const nightsStr = nightsCount >= 3 ? `${nightsCount} đêm (${nightsCount + 1} ngày)` : `${nightsCount} đêm`;
+        
+        const inDate = typeof checkinDate !== 'undefined' ? checkinDate : new Date();
+        const outDate = typeof checkoutDate !== 'undefined' ? checkoutDate : new Date();
+        const rData = typeof roomsData !== 'undefined' ? roomsData : [];
+        const roomsStr = rData.map(r => r.name).join(', ');
+
+        const adults = typeof adultsCount !== 'undefined' ? adultsCount : 2;
+        const children = (bookingData && bookingData.children) ? parseInt(bookingData.children) : 0;
+        const childrenAges = (bookingData && bookingData.childrenAgeCategory) ? bookingData.childrenAgeCategory.split(',').filter(a => a) : [];
+        
+        let guestStr = `${adults} người lớn`;
+        if (children > 0) {
+            guestStr += `, ${children} trẻ em (${childrenAges.join(', ')} tuổi)`;
+        }
+
+        return `BILL XÁC NHẬN ĐẶT PHÒNG 
+
+➖𝐓𝐇𝐎̂𝐍𝐆 𝐓𝐈𝐍
+- Địa chỉ: 07 Thánh Tâm - Phường 5, Tp. Đà Lạt
+https://maps.app.goo.gl/aW824oYN5dznY7JX9?g_st=com.google.maps.preview.copy
+- Liên hệ nhận phòng : 0889717713 (Mr. Trọng Đạt)
+- Hình thức thuê: ${roomsStr}
+
+➖𝐓𝐇𝐎̂𝐍𝐆 𝐓𝐈𝐍 𝐊𝐇𝐀́𝐂𝐇 
+- Tên khách hàng : ${name}
+- Số điện thoại : ${zalo}
+- Số người: ${guestStr}
+- Số ngày thuê: ${nightsStr}
+* Ngày nhận nhà: 14h00 ngày ${formatDateObj(inDate)}
+* Ngày trả nhà: 12h00 ngày ${formatDateObj(outDate)}
+
+✅ 𝐓𝐇𝐀𝐍𝐇 𝐓𝐎𝐀́𝐍
+- Thành tiền: ${renderCurrency(currentTotal)}
+- Đặt cọc: ${renderCurrency(currentDeposit)}
+( 𝐗𝐚́𝐜 𝐧𝐡𝐚̣̂𝐧 đ𝐚̃ 𝐧𝐡𝐚̣̂𝐧 đ𝐮̛𝐨̛̣𝐜 𝐭𝐢𝐞̂̀𝐧 𝐜𝐨̣𝐜 )
+- Còn lại: ${renderCurrency(remaining)}
+Số tiền còn lại quý khách vui lòng thanh toán hết ngay sau khi nhận nhà
+
+➖ 𝐆𝐇𝐈 𝐂𝐇𝐔́
+- Quý khách vui lòng tự bảo vệ tài sản cá nhân, mọi mất mát bên home không chịu trách nhiệm. 
+- Booking không hoàn, huỷ, đổi dưới mọi hình thức. 
+- Quý khách vui lòng đem theo CMND hoặc Passport để làm thủ tục đăng kí lưu thú.
+- Quý khách vui lòng đi đúng số lượng người, nếu có phát sinh phụ thu.`;
+    };
+
+    if (copyBillBtn) {
+        copyBillBtn.addEventListener('click', () => {
+            const name = guestNameInput.value.trim() || "Quý khách";
+            const phone = guestZaloInput.value.trim() || "Chưa cung cấp";
+            const fullText = generateBillText(name, phone);
+
+            navigator.clipboard.writeText(fullText).then(() => {
+                const originalText = copyBillBtn.innerHTML;
+                copyBillBtn.innerHTML = '<span class="material-symbols-outlined text-sm">check</span><span>ĐÃ CHÉP BILL</span>';
+                setTimeout(() => { copyBillBtn.innerHTML = originalText; }, 2000);
+            }).catch(err => {
+                console.error("Clipboard Error:", err);
+                alert("Không thể tự động sao chép. Vui lòng copy thủ công.");
+            });
+        });
+    }
+
+    // Existing Copy & Transfer button logic
     const copyBtn = document.getElementById('copy-stk-btn');
     if (copyBtn) {
         copyBtn.addEventListener('click', () => {
-            // Priority: PayOS Data, Fallback: Manual Bank from user image
             const accountNumber = (payosData && payosData.accountNumber) ? payosData.accountNumber : "0173100004750004";
-            
             navigator.clipboard.writeText(accountNumber).then(() => {
                 const originalText = copyBtn.innerHTML;
                 copyBtn.innerHTML = '<span class="material-symbols-outlined text-sm">check</span><span>Đã chép</span>';

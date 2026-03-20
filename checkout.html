@@ -163,7 +163,20 @@
                                     </div>
                                 </div>
 
+                                <!-- Status Indicator (Beneath QR) -->
+                                <div id="payment-status-indicator" class="flex flex-col items-center gap-1 hidden transition-opacity duration-300">
+                                    <div class="flex items-center gap-2">
+                                        <span class="material-symbols-outlined animate-spin text-primary text-sm">sync</span>
+                                        <span id="payment-status-text" class="text-[10px] text-primary font-bold uppercase tracking-tight">Đang chờ thanh toán...</span>
+                                    </div>
+                                    <button id="manual-check-btn" class="text-[10px] text-primary/60 underline font-medium hover:text-primary transition-colors">Kiểm tra lại ngay</button>
+                                </div>
+
                                 <div class="space-y-3">
+                                    <div class="flex flex-col items-center">
+                                        <span class="text-[10px] uppercase tracking-widest text-primary/50 font-bold">Ngân hàng</span>
+                                        <span id="payos-bank-name" class="text-sm font-serif font-bold text-primary">Ngân hàng TMCP Phương Đông (OCB)</span>
+                                    </div>
                                     <div class="flex flex-col items-center">
                                         <span class="text-[10px] uppercase tracking-widest text-primary/50 font-bold">Số tài khoản</span>
                                         <span id="payos-account-no" class="text-xl font-serif font-bold text-primary tracking-widest">...</span>
@@ -185,6 +198,56 @@
                                         <span>Chuyển khoản</span>
                                     </a>
                                 </div>
+
+                                <!-- Success Feedback (Hidden initially) -->
+                                <div id="payment-success-overlay" class="hidden opacity-0 border-t-2 border-dashed border-green-500/30 pt-6 mt-6 space-y-6">
+                                    <div class="flex flex-col items-center gap-2">
+                                        <div class="bg-green-500 text-white rounded-full p-2 shadow-lg animate-bounce">
+                                            <span class="material-symbols-outlined text-3xl">check</span>
+                                        </div>
+                                        <p id="bill-verified-text" class="text-lg font-bold text-green-600 uppercase tracking-tighter decoration-1 underline-offset-4">Xác Nhận Đã Nhận Được Cọc</p>
+                                    </div>
+
+                                    <!-- Info Collection Form -->
+                                    <div id="info-collection-form" class="space-y-5 text-left bg-primary/5 p-4 rounded-xl border border-primary/10">
+                                        <p class="text-center text-[11px] font-bold text-primary uppercase tracking-tight">Xin vui lòng xác nhạn lại thông tin người đặt phòng.</p>
+                                        
+                                        <div class="space-y-3">
+                                            <div class="space-y-1">
+                                                <label class="text-[9px] uppercase tracking-widest text-primary/60 font-bold ml-1">Họ và tên người đặt phòng</label>
+                                                <input type="text" id="guest-fullname" placeholder="Nhập họ tên..." 
+                                                    class="w-full bg-white border border-primary/20 rounded-lg px-3 py-2.5 text-sm focus:border-primary focus:ring-0 transition-all font-medium" />
+                                            </div>
+                                            <div class="space-y-1">
+                                                <label class="text-[9px] uppercase tracking-widest text-primary/60 font-bold ml-1">Số điện thoại Zalo liên hệ</label>
+                                                <input type="tel" id="guest-zalo" placeholder="Nhập số Zalo..." 
+                                                    class="w-full bg-white border border-primary/20 rounded-lg px-3 py-2.5 text-sm focus:border-primary focus:ring-0 transition-all font-medium" />
+                                            </div>
+                                            <button id="confirm-info-btn" class="w-full bg-primary text-white py-3 rounded-lg font-bold tracking-widest hover:bg-primary/90 transition-all shadow-md active:scale-95 text-xs select-none">
+                                                XÁC NHẬN & XUẤT BILL
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- BILL RESULT (Scrollable reveal) -->
+                                    <div id="bill-result-container" class="hidden w-full bg-white rounded-xl shadow-2xl border-2 border-primary overflow-hidden flex flex-col transition-all duration-1000 transform translate-y-10 opacity-0">
+                                        <div class="bg-primary p-3 text-center">
+                                            <h3 class="font-serif text-white font-bold text-sm uppercase tracking-widest">BILL XÁC NHẬN ĐẶT PHÒNG</h3>
+                                        </div>
+                                        
+                                        <div class="p-5 space-y-4 max-h-[350px] overflow-y-auto font-mono text-[10px] leading-relaxed text-left border-b border-primary/10 whitespace-pre-wrap" id="bill-text-content">
+                                            <!-- Bill text injected here -->
+                                        </div>
+
+                                        <div class="p-3 bg-primary/5 flex gap-2">
+                                            <button id="copy-bill-btn" class="flex-1 flex items-center justify-center gap-2 bg-white border border-primary text-primary py-2.5 rounded-lg font-bold text-[10px] hover:bg-blue-50 transition-all active:scale-95 select-none touch-manipulation">
+                                                <span class="material-symbols-outlined text-sm pointer-events-none">content_copy</span>
+                                                <span class="pointer-events-none">SAO CHÉP BILL</span>
+                                            </button>
+                                            <a href="index.html" class="flex-1 px-4 py-2.5 bg-primary text-white text-[10px] font-bold rounded-lg flex items-center justify-center text-center select-none active:scale-95 transition-all">HOÀN TẤT</a>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="w-full space-y-2 border-t border-primary/10 pt-4">
@@ -199,42 +262,6 @@
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- Success Section -->
-            <div id="success-section" class="hidden opacity-0 transition-all duration-700 flex flex-col items-center justify-center py-12 space-y-8">
-                <div class="relative">
-                    <div class="absolute inset-0 bg-green-100 rounded-full animate-ping opacity-25"></div>
-                    <div class="relative bg-green-500 text-white rounded-full p-6 shadow-2xl">
-                        <span class="material-symbols-outlined text-6xl">check_circle</span>
-                    </div>
-                </div>
-                
-                <div class="text-center space-y-4">
-                    <h2 class="font-serif text-3xl font-bold text-green-600">Thanh Toán Thành Công!</h2>
-                    <p class="text-primary font-medium">Cảm ơn bạn đã lựa chọn Chồn Village. <br/>Yêu cầu đặt phòng của bạn đã được ghi nhận.</p>
-                </div>
-
-                <div class="w-full bg-primary/5 p-6 rounded-2xl border-2 border-dashed border-primary/30 space-y-4">
-                    <div class="flex justify-between items-center text-sm">
-                        <span class="text-slate-500">Mã đơn hàng:</span>
-                        <span id="success-order-code" class="font-bold text-primary">...</span>
-                    </div>
-                    <div class="flex justify-between items-center text-sm">
-                        <span class="text-slate-500">Trạng thái:</span>
-                        <span class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-[10px] font-bold uppercase">Đã thanh toán</span>
-                    </div>
-                </div>
-
-                <div class="flex flex-col w-full gap-3">
-                    <a href="index.html" class="w-full bg-primary text-white text-center py-4 rounded-xl font-bold tracking-wider hover:scale-[1.02] transition-transform shadow-lg uppercase text-sm">
-                        Quay lại trang chủ
-                    </a>
-                    <a href="https://zalo.me/0889717713" target="_blank" class="w-full bg-white text-primary border-2 border-primary text-center py-4 rounded-xl font-bold tracking-wider hover:bg-primary/5 transition-colors uppercase text-sm flex items-center justify-center gap-2">
-                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Icon_of_Zalo.svg/1200px-Icon_of_Zalo.svg.png" class="h-5 w-5" />
-                        Liên hệ hỗ trợ Zalo
-                    </a>
                 </div>
             </div>
             <!-- CTA Button -->

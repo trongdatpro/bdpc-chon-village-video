@@ -50,6 +50,25 @@ app.post('/create-payment-link', async (req, res) => {
     }
 });
 
+// Đoạn 3: Kiểm tra trạng thái đơn hàng (v2 SDK sử dụng paymentRequests.get)
+app.get('/get-order/:orderCode', async (req, res) => {
+    try {
+        const param = req.params.orderCode;
+        // Nếu param chỉ toàn số thì chuyển sang Number, nếu có chữ (GUID) thì giữ String
+        const orderId = /^\d+$/.test(param) ? Number(param) : param;
+        
+        console.log(`[PAYOS] Check Status Request for Order: ${orderId}`);
+        
+        const order = await payos.paymentRequests.get(orderId);
+        
+        console.log(`[PAYOS] Result for ${orderId}:`, order.status);
+        res.json(order);
+    } catch (error) {
+        console.error("Lỗi API get-order:", error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.listen(3000, () => {
     console.log("-----------------------------------------");
     console.log("🚀 SERVER CHON VILLAGE DA CHAY TAI CONG 3000");
