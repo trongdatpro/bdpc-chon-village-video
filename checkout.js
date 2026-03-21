@@ -239,9 +239,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     setTimeout(() => paymentSection.classList.remove('opacity-0'), 10);
                     
                     // Populate basic info
-                    const transferContentEl = document.getElementById('checkout-transfer-content');
+                    const qrLoading = document.getElementById('qr-loading');
                     const depositAmountEl = document.getElementById('checkout-deposit-amount');
-                    if (transferContentEl) transferContentEl.textContent = `CHON ${bookingData.phone || ''}`.toUpperCase();
                     if (depositAmountEl) depositAmountEl.textContent = renderCurrency(depositAmount);
 
                     // Call PayOS Backend Automatically
@@ -252,7 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 amount: depositAmount,
-                                description: `CHON ${bookingData.phone || ''}`.substring(0, 25)
+                                description: "Thanh toan"
                             })
                         });
                         
@@ -279,8 +278,136 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (accountNoEl) accountNoEl.textContent = payosData.accountNumber;
                             if (accountNameEl) accountNameEl.textContent = payosData.accountName;
                             if (transferBtn) {
-                                transferBtn.href = payosData.checkoutUrl || '#';
-                                transferBtn.innerHTML = '<span class="material-symbols-outlined text-sm">rocket_launch</span><span>Chuyển khoản</span>';
+                                // BANK DATA
+                                const ALL_BANKS = [
+                                    { id: 'vcb', name: 'Vietcombank', priority: true },
+                                    { id: 'mb', name: 'MB Bank', priority: true },
+                                    { id: 'tcb', name: 'Techcombank', priority: true },
+                                    { id: 'icb', name: 'VietinBank', priority: true },
+                                    { id: 'bidv', name: 'BIDV', priority: true },
+                                    { id: 'vba', name: 'Agribank', priority: true },
+                                    { id: 'tpb', name: 'TPBank (Tien Phong)' },
+                                    { id: 'vpb', name: 'VPBank' },
+                                    { id: 'acb', name: 'ACB (A Chau)' },
+                                    { id: 'stb', name: 'Sacombank' },
+                                    { id: 'vib', name: 'VIB (Quoc Te)' },
+                                    { id: 'hdb', name: 'HDBank' },
+                                    { id: 'shb', name: 'SHB (Saigon-Hanoi)' },
+                                    { id: 'eib', name: 'Eximbank' },
+                                    { id: 'msb', name: 'MSB (Maritime)' },
+                                    { id: 'seab', name: 'SeABank' },
+                                    { id: 'ocb', name: 'OCB (Phuong Dong)' },
+                                    { id: 'lpb', name: 'LPBank' },
+                                    { id: 'pvcb', name: 'PVcomBank' },
+                                    { id: 'bab', name: 'Bac A Bank' },
+                                    { id: 'nab', name: 'Nam A Bank' },
+                                    { id: 'vietbank', name: 'VietBank' },
+                                    { id: 'vccb', name: 'VietCapitalBank' },
+                                    { id: 'bvb', name: 'BaoVietBank' },
+                                    { id: 'pgb', name: 'PGBank' },
+                                    { id: 'sgb', name: 'Saigonbank' },
+                                    { id: 'klb', name: 'Kienlongbank' },
+                                    { id: 'ncb', name: 'NCB (Quoc Dan)' },
+                                    { id: 'oceanbank', name: 'OceanBank' },
+                                    { id: 'gpb', name: 'GPBank' },
+                                    { id: 'cbb', name: 'CBBank' },
+                                    { id: 'hsbc', name: 'HSBC' },
+                                    { id: 'scvn', name: 'Standard Chartered' },
+                                    { id: 'shinhan', name: 'Shinhan Bank' },
+                                    { id: 'woori', name: 'Woori Bank' },
+                                    { id: 'pbb', name: 'Public Bank' },
+                                    { id: 'uob', name: 'UOB' },
+                                    { id: 'cimb', name: 'CIMB' },
+                                    { id: 'hlb', name: 'Hong Leong Bank' },
+                                    { id: 'ivb', name: 'Indovina Bank' },
+                                    { id: 'vrb', name: 'VRB (Viet-Nga)' }
+                                ];
+
+                                const pickerOverlay = document.getElementById('bank-picker-overlay');
+                                const pickerModal = document.getElementById('bank-picker-modal');
+                                const closeBtn = document.getElementById('close-bank-picker');
+                                const searchInput = document.getElementById('bank-search-input');
+                                const topGrid = document.getElementById('top-banks-grid');
+                                const resultsList = document.getElementById('bank-results-list');
+                                const fallbackBtn = document.getElementById('use-payos-fallback');
+
+                                const showPicker = () => {
+                                    pickerOverlay.classList.remove('hidden');
+                                    setTimeout(() => {
+                                        pickerOverlay.classList.remove('opacity-0');
+                                        pickerModal.classList.remove('translate-y-full');
+                                    }, 10);
+                                    renderPicker();
+                                };
+
+                                const hidePicker = () => {
+                                    pickerOverlay.classList.add('opacity-0');
+                                    pickerModal.classList.add('translate-y-full');
+                                    setTimeout(() => pickerOverlay.classList.add('hidden'), 300);
+                                };
+
+                                // App-to-App Payment Redirect (Direct Deep Link)
+                                // NAPAS Standard Deep Link (One-Touch Payment)
+                                window.selectBankDirect = (id) => {
+                                    if (!payosData) {
+                                        console.error("[BANK PICKER] Missing PayOS data");
+                                        return;
+                                    }
+                                    
+                                    const acc = payosData.accountNumber || "";
+                                    const bin = payosData.bin || ""; // Recipient Bank BIN (e.g., 970448 for OCB)
+                                    const am = payosData.amount || 0;
+                                    const tn = encodeURIComponent(payosData.description || "");
+
+                                    // The exact structure requested for dl.vietqr.io:
+                                    // app=[APP_ID] & ba=[RECIPIENT_ACC]@[RECIPIENT_BIN] & am=[AMOUNT] & tn=[NOTE]
+                                    const url = `https://dl.vietqr.io/pay?app=${id}&ba=${acc}@${bin}&am=${am}&tn=${tn}`;
+                                    
+                                    console.log(`[BANK PICKER] Triggering NAPAS Deep Link for ${id}:`, url);
+                                    window.location.href = url;
+                                };
+
+                                const renderPicker = (filter = '') => {
+                                    const topBanks = ALL_BANKS.filter(b => b.priority);
+                                    const filtered = ALL_BANKS.filter(b => 
+                                        b.name.toLowerCase().includes(filter.toLowerCase()) || 
+                                        b.id.toLowerCase().includes(filter.toLowerCase())
+                                    );
+
+                                    if (!filter) {
+                                        topGrid.innerHTML = topBanks.map(bank => `
+                                            <button onclick="selectBankDirect('${bank.id}')" class="flex flex-col items-center gap-2 p-3 bg-primary/5 border border-primary/20 rounded-xl hover:bg-primary/10 transition-all active:scale-95 group">
+                                                <div class="w-10 h-10 bg-white rounded-lg shadow-sm flex items-center justify-center overflow-hidden border border-primary/10 p-1">
+                                                    <img src="https://api.vietqr.io/img/${bank.id.toUpperCase()}.png" alt="${bank.name}" class="w-full h-full object-contain" />
+                                                </div>
+                                                <span class="text-[9px] font-bold text-primary uppercase text-center truncate w-full">${bank.name}</span>
+                                            </button>
+                                        `).join('');
+                                        topGrid.parentElement.classList.remove('hidden');
+                                    } else {
+                                        topGrid.parentElement.classList.add('hidden');
+                                    }
+
+                                    if (filter) {
+                                        resultsList.innerHTML = filtered.map(bank => `
+                                            <button onclick="selectBankDirect('${bank.id}')" class="w-full flex items-center gap-4 p-3 hover:bg-primary/10 rounded-xl transition-all active:scale-[0.98] border-b border-primary/5 group">
+                                                <div class="w-8 h-8 bg-white rounded-lg shadow-sm flex items-center justify-center overflow-hidden border border-primary/10 p-0.5">
+                                                    <img src="https://api.vietqr.io/img/${bank.id.toUpperCase()}.png" alt="${bank.name}" class="w-full h-full object-contain" />
+                                                </div>
+                                                <span class="text-xs font-bold text-primary/80 group-hover:text-primary transition-colors">${bank.name}</span>
+                                                <span class="material-symbols-outlined ml-auto text-primary/30 text-sm">chevron_right</span>
+                                            </button>
+                                        `).join('');
+                                    } else {
+                                        resultsList.innerHTML = '<p class="text-[10px] text-primary/30 text-center py-4 italic">Nhập tên ngân hàng để tìm kiếm...</p>';
+                                    }
+                                };
+
+                                transferBtn.onclick = showPicker;
+                                if (closeBtn) closeBtn.onclick = hidePicker;
+                                if (pickerOverlay) pickerOverlay.onclick = (e) => { if(e.target === pickerOverlay) hidePicker(); };
+                                if (searchInput) searchInput.oninput = (e) => renderPicker(e.target.value);
+                                if (fallbackBtn) fallbackBtn.onclick = () => window.location.href = payosData.checkoutUrl;
                             }
 
                             // 3. Start Polling for status (Use ID for v2)
@@ -485,7 +612,7 @@ document.addEventListener('DOMContentLoaded', () => {
             guestStr += `, ${children} trẻ em (${childrenAges.join(', ')} tuổi)`;
         }
 
-        return `BILL XÁC NHẬN ĐẶT PHÒNG 
+        return `BILL XÁC NHẬN ĐẶT PHÒNG 
 
 ➖𝐓𝐇𝐎̂𝐍𝐆 𝐓𝐈𝐍
 - Địa chỉ: 07 Thánh Tâm - Phường 5, Tp. Đà Lạt
