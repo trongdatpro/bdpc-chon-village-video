@@ -131,7 +131,15 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span class="text-black text-sm uppercase tracking-wider font-bold">Chi tiết giá:</span>
                             <div class="space-y-3">
                                 <div class="flex flex-col text-sm">
-                                    <span class="text-black font-bold mt-0.5">Giá phòng: ${renderCurrency(room.basePrice)}</span>
+                                    ${room.nightlyDetails ? room.nightlyDetails.map(n => {
+                                        const label = n.isHoliday ? "Giá Lễ" : "Giá Ngày";
+                                        return `<span class="text-black font-bold mt-0.5">${label} ${n.date} : ${renderCurrency(n.price)} / 1 Đêm</span>`;
+                                    }).join('') : (room.groupedNights ? room.groupedNights.map(group => {
+                                        const dateLabel = group.count > 1
+                                            ? `Giá Ngày ${group.startDate}-${group.endDate} :`
+                                            : `Giá ${group.isHoliday ? 'Ngày Lễ ' : 'Ngày '}${group.startDate} :`;
+                                        return `<span class="text-black font-bold mt-0.5">${dateLabel} ${renderCurrency(group.price)} / 1 Đêm</span>`;
+                                    }).join('') : `<span class="text-black font-bold mt-0.5">Giá phòng: ${renderCurrency(room.basePrice)}</span>`)}
                                 </div>
                                 ${room.surchargeAllocated > 0 ? `
                                 <div class="flex flex-col text-sm">
@@ -175,6 +183,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (qrLoading) qrLoading.classList.add('hidden');
         if (qrImg) qrImg.classList.add('hidden');
         if (actionBtns) actionBtns.classList.add('hidden');
+
+        // Auto-hide Bank Picker if open
+        const pickerOverlay = document.getElementById('bank-picker-overlay');
+        const pickerModal = document.getElementById('bank-picker-modal');
+        if (pickerOverlay && !pickerOverlay.classList.contains('hidden')) {
+            pickerOverlay.classList.add('opacity-0');
+            if (pickerModal) pickerModal.classList.add('translate-y-full');
+            setTimeout(() => pickerOverlay.classList.add('hidden'), 300);
+        }
 
         // Show Success Overlay inside Payment Section
         const successOverlay = document.getElementById('payment-success-overlay');
@@ -269,7 +286,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             const transferBtn = document.getElementById('transfer-app-btn');
 
                             if (qrImg) {
-                                qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(payosData.qrCode)}`;
+                                // MODERN branded VietQR: includes NAPAS + Bank Logos
+                                const brandedQrUrl = `https://img.vietqr.io/image/${payosData.bin}-${payosData.accountNumber}-print.png?amount=${payosData.amount}&addInfo=${encodeURIComponent(payosData.description)}&accountName=${encodeURIComponent(payosData.accountName)}`;
+                                qrImg.src = brandedQrUrl;
+                                
                                 qrImg.onload = () => {
                                     qrImg.classList.remove('hidden');
                                     if (qrLoading) qrLoading.classList.add('hidden');
@@ -277,6 +297,83 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                             if (accountNoEl) accountNoEl.textContent = payosData.accountNumber;
                             if (accountNameEl) accountNameEl.textContent = payosData.accountName;
+                            const bankNameEl = document.getElementById('payos-bank-name');
+                            if (bankNameEl) bankNameEl.textContent = payosData.bankName || "Ngân hàng TMCP Phương Đông (OCB)";
+
+                            // QR Actions: Download & Share
+                            const downloadBtn = document.getElementById('download-qr-btn');
+                            const shareBtn = document.getElementById('share-qr-btn');
+                            
+                            if (downloadBtn) {
+                                downloadBtn.onclick = async () => {
+                                    try {
+                                        const qrApiUrl = `https://img.vietqr.io/image/${payosData.bin}-${payosData.accountNumber}-print.png?amount=${payosData.amount}&addInfo=${encodeURIComponent(payosData.description)}&accountName=${encodeURIComponent(payosData.accountName)}`;
+                                        const res = await fetch(qrApiUrl);
+                                        const blob = await res.blob();
+                                        const url = window.URL.createObjectURL(blob);
+                                        const a = document.createElement('a');
+                                        a.href = url;
+                                        a.download = `thanh-toan-chon-village-${payosData.orderCode}.png`;
+                                        document.body.appendChild(a);
+                                        a.click();
+                                        document.body.removeChild(a);
+                                        window.URL.revokeObjectURL(url);
+                                    } catch (err) { alert("Lỗi tải ảnh. Vui lòng chụp màn hình."); }
+                                };
+                            }
+
+                            if (shareBtn) {
+                                shareBtn.onclick = async () => {
+                                    const shareUrl = payosData.checkoutUrl;
+                                    const triggerSuccess = () => {
+                                        const originalContent = shareBtn.innerHTML;
+                                        shareBtn.innerHTML = '<span class="material-symbols-outlined text-base leading-none">check</span><span>ĐÃ CHÉP LINK</span>';
+                                        shareBtn.classList.add('bg-green-50', 'text-green-600', 'border-green-200');
+                                        setTimeout(() => { 
+                                            shareBtn.innerHTML = originalContent;
+                                            shareBtn.classList.remove('bg-green-50', 'text-green-600', 'border-green-200');
+                                        }, 3000);
+                                    };
+
+                                    try {
+                                        // 1. Prepare data & text
+                                        const shareTitle = 'Thanh toán Chon Village';
+                                        const shareText = `Thanh toán cọc cho Chon Village. STK: ${payosData.accountNumber} (${payosData.accountName})`;
+                                        
+                                        // 2. Try Image Sharing (Modern)
+                                        if (navigator.canShare && window.isSecureContext) {
+                                            const brandedQrApiUrl = `https://img.vietqr.io/image/${payosData.bin}-${payosData.accountNumber}-print.png?amount=${payosData.amount}&addInfo=${encodeURIComponent(payosData.description)}&accountName=${encodeURIComponent(payosData.accountName)}`;
+                                            const res = await fetch(brandedQrApiUrl);
+                                            const blob = await res.blob();
+                                            const file = new File([blob], `thanh-toan-${payosData.orderCode}.png`, { type: 'image/png' });
+
+                                            const shareData = {
+                                                title: shareTitle,
+                                                text: shareText,
+                                                url: shareUrl,
+                                                files: [file]
+                                            };
+
+                                            if (navigator.canShare(shareData)) {
+                                                await navigator.share(shareData);
+                                                return; // Success
+                                            }
+                                        }
+
+                                        // 3. Fallback: Generic Web Share (Text/URL only)
+                                        if (navigator.share && window.isSecureContext) {
+                                            await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
+                                        } else {
+                                            // 4. Fallback: Clipboard (For HTTP/Local Testing)
+                                            fallbackCopyText(shareUrl, triggerSuccess);
+                                        }
+                                    } catch (e) {
+                                        console.error("[SHARE ERROR]", e);
+                                        if (e.name !== 'AbortError') fallbackCopyText(shareUrl, triggerSuccess);
+                                    }
+                                };
+                            }
+
                             if (transferBtn) {
                                 // BANK DATA
                                 const ALL_BANKS = [
@@ -364,6 +461,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     const url = `https://dl.vietqr.io/pay?app=${id}&ba=${acc}@${bin}&am=${am}&tn=${tn}`;
                                     
                                     console.log(`[BANK PICKER] Triggering NAPAS Deep Link for ${id}:`, url);
+                                    hidePicker(); // Close UI immediately
                                     window.location.href = url;
                                 };
 
@@ -407,7 +505,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                 if (closeBtn) closeBtn.onclick = hidePicker;
                                 if (pickerOverlay) pickerOverlay.onclick = (e) => { if(e.target === pickerOverlay) hidePicker(); };
                                 if (searchInput) searchInput.oninput = (e) => renderPicker(e.target.value);
-                                if (fallbackBtn) fallbackBtn.onclick = () => window.location.href = payosData.checkoutUrl;
+                                if (fallbackBtn) fallbackBtn.onclick = () => {
+                                    hidePicker();
+                                    window.location.href = payosData.checkoutUrl;
+                                };
                             }
 
                             // 3. Start Polling for status (Use ID for v2)
@@ -434,15 +535,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                // Smooth scroll
-                setTimeout(() => {
-                    if (summarySection) {
-                        const header = document.querySelector('header');
-                        const headerHeight = header ? header.offsetHeight : 80;
-                        const offsetPosition = summarySection.getBoundingClientRect().top + window.pageYOffset - headerHeight - 20;
-                        window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
-                    }
-                }, 300);
+                // Zero-Delay Scroll (Optimized)
+                if (summarySection) {
+                    const header = document.querySelector('header');
+                    const headerHeight = header ? header.offsetHeight : 80;
+                    const offsetPosition = summarySection.getBoundingClientRect().top + window.pageYOffset - headerHeight - 20;
+                    window.scrollTo({ top: offsetPosition, behavior: 'instant' });
+                }
             } else {
                 // Hide Sections
                 if (summarySection) {
@@ -496,17 +595,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    let currentPollingOrderCode = null;
     const startPaymentPolling = (orderCode) => {
         if (pollingInterval) clearInterval(pollingInterval);
+        currentPollingOrderCode = orderCode; // Store for visibility-tab-switch trigger
         console.log("Started polling for order:", orderCode);
         
-        // Show indicator after a short delay (so it doesn't flicker on instant success)
+        // Show indicator after a short delay
         setTimeout(() => {
             if (statusIndicator && !window.location.search.includes('status=PAID')) {
                 statusIndicator.classList.remove('hidden');
                 setTimeout(() => statusIndicator.classList.remove('opacity-0'), 10);
             }
-        }, 2000);
+        }, 1500);
 
         pollingInterval = setInterval(async () => {
             const result = await checkStatusOnce(orderCode);
@@ -516,7 +617,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (statusText) statusText.textContent = "Giao dịch đã bị hủy.";
                 clearInterval(pollingInterval);
             }
-        }, 4000);
+        }, 2000); // Faster polling (2s instead of 4s)
+
+        // Reactive Check: Try immediately when user returns to tab
+        const handleVisibilityChange = async () => {
+            if (document.visibilityState === 'visible' && currentPollingOrderCode === orderCode) {
+                console.log("[POLLING] Tab visible! Triggering immediate check...");
+                await checkStatusOnce(orderCode);
+            }
+        };
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
 
         // Manual Check Button
         if (manualBtn) {
@@ -560,10 +671,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const infoForm = document.getElementById('info-collection-form');
     const billContainer = document.getElementById('bill-result-container');
     const billTextEl = document.getElementById('bill-text-content');
-    const copyBillBtn = document.getElementById('copy-bill-btn');
+    const sendBillZaloBtn = document.getElementById('send-bill-zalo-btn');
 
+
+
+    // Replace the confirmInfoBtn logic or use existing structure
     if (confirmInfoBtn) {
         confirmInfoBtn.addEventListener('click', () => {
+            // Existing bill logic...
             console.log("Confirm Info Clicked");
             const name = guestNameInput ? guestNameInput.value.trim() : "Quý khách";
             const phone = guestZaloInput ? guestZaloInput.value.trim() : "Chưa cung cấp";
@@ -575,6 +690,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Generate Bill Text
             const billText = generateBillText(name, phone);
+            
+            // PERSIST FOR HISTORY (Image 1 logic)
+            sessionStorage.setItem('chonVillageLastBooking', JSON.stringify({
+                billText: billText,
+                timestamp: Date.now()
+            }));
+            
+            // Show bubble immediately
+            if (window.refreshBookedBubble) window.refreshBookedBubble();
+
             if (billTextEl) {
                 billTextEl.innerHTML = billText.replace(/\n/g, '<br/>');
             }
@@ -608,70 +733,83 @@ document.addEventListener('DOMContentLoaded', () => {
         const childrenAges = (bookingData && bookingData.childrenAgeCategory) ? bookingData.childrenAgeCategory.split(',').filter(a => a) : [];
         
         let guestStr = `${adults} người lớn`;
+        if (children < 0) children = 0; // safety
         if (children > 0) {
             guestStr += `, ${children} trẻ em (${childrenAges.join(', ')} tuổi)`;
         }
 
-        return `BILL XÁC NHẬN ĐẶT PHÒNG 
+        return `BILL XÁC NHẬN ĐẶT PHÒNG 
 
-➖𝐓𝐇𝐎̂𝐍𝐆 𝐓𝐈𝐍
-- Địa chỉ: 07 Thánh Tâm - Phường 5, Tp. Đà Lạt
+➖ THÔNG TIN
+- Địa chỉ: 07 Thánh Tâm - Phường 5, Tp. Đà Lạt
 https://maps.app.goo.gl/aW824oYN5dznY7JX9?g_st=com.google.maps.preview.copy
-- Liên hệ nhận phòng : 0889717713 (Mr. Trọng Đạt)
-- Hình thức thuê: ${roomsStr}
+- Liên hệ nhận phòng : 0889717713 (Mr. Trọng Đạt)
+- Hình thức thuê: ${roomsStr}
 
-➖𝐓𝐇𝐎̂𝐍𝐆 𝐓𝐈𝐍 𝐊𝐇𝐀́𝐂𝐇 
-- Tên khách hàng : ${name}
+➖ THÔNG TIN KHÁCH 
+- Tên khách hàng : ${name}
 - Số điện thoại : ${zalo}
 - Số người: ${guestStr}
-- Số ngày thuê: ${nightsStr}
-* Ngày nhận nhà: 14h00 ngày ${formatDateObj(inDate)}
-* Ngày trả nhà: 12h00 ngày ${formatDateObj(outDate)}
+- Số ngày thuê: ${nightsStr}
+* Ngày nhận nhà: 14h00 ngày ${formatDateObj(inDate)}
+* Ngày trả nhà: 12h00 ngày ${formatDateObj(outDate)}
 
-✅ 𝐓𝐇𝐀𝐍𝐇 𝐓𝐎𝐀́𝐍
-- Thành tiền: ${renderCurrency(currentTotal)}
-- Đặt cọc: ${renderCurrency(currentDeposit)}
-( 𝐗𝐚́𝐜 𝐧𝐡𝐚̣̂𝐧 đ𝐚̃ 𝐧𝐡𝐚̣̂𝐧 đ𝐮̛𝐨̛̣𝐜 𝐭𝐢𝐞̂̀𝐧 𝐜𝐨̣𝐜 )
-- Còn lại: ${renderCurrency(remaining)}
-Số tiền còn lại quý khách vui lòng thanh toán hết ngay sau khi nhận nhà
+✅ THANH TOÁN
+- Thành tiền: ${renderCurrency(currentTotal)}
+- Đặt cọc: ${renderCurrency(currentDeposit)}
+( Xác nhận đã nhận được tiền cọc )
+- Còn lại: ${renderCurrency(remaining)}
+Số tiền còn lại quý khách vui lòng thanh toán hết ngay sau khi nhận nhà
 
-➖ 𝐆𝐇𝐈 𝐂𝐇𝐔́
+➖ GHI CHÚ
 - Quý khách vui lòng tự bảo vệ tài sản cá nhân, mọi mất mát bên home không chịu trách nhiệm. 
 - Booking không hoàn, huỷ, đổi dưới mọi hình thức. 
-- Quý khách vui lòng đem theo CMND hoặc Passport để làm thủ tục đăng kí lưu thú.
+- Quý khách vui lòng đem theo CMND hoặc Passport để làm thủ tục đăng kí lưu trú.
 - Quý khách vui lòng đi đúng số lượng người, nếu có phát sinh phụ thu.`;
     };
 
-    if (copyBillBtn) {
-        copyBillBtn.addEventListener('click', () => {
-            const name = guestNameInput.value.trim() || "Quý khách";
-            const phone = guestZaloInput.value.trim() || "Chưa cung cấp";
+    // Helper for non-secure contexts
+    function fallbackCopyText(text, callback) {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        textArea.style.top = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            const successful = document.execCommand('copy');
+            if (successful && callback) callback();
+        } catch (err) {
+            console.error('Fallback copy failed', err);
+            alert("Không thể tự động sao chép. Vui lòng copy thủ công.");
+        }
+        document.body.removeChild(textArea);
+    }
+
+    if (sendBillZaloBtn) {
+        sendBillZaloBtn.addEventListener('click', () => {
+            const name = (guestNameInput && guestNameInput.value) ? guestNameInput.value.trim() : "Quý khách";
+            const phone = (guestZaloInput && guestZaloInput.value) ? guestZaloInput.value.trim() : "Chưa cung cấp";
             const fullText = generateBillText(name, phone);
 
-            navigator.clipboard.writeText(fullText).then(() => {
-                const originalText = copyBillBtn.innerHTML;
-                copyBillBtn.innerHTML = '<span class="material-symbols-outlined text-sm">check</span><span>ĐÃ CHÉP BILL</span>';
-                setTimeout(() => { copyBillBtn.innerHTML = originalText; }, 2000);
-            }).catch(err => {
-                console.error("Clipboard Error:", err);
-                alert("Không thể tự động sao chép. Vui lòng copy thủ công.");
-            });
+            const triggerSuccess = () => {
+                const originalText = sendBillZaloBtn.innerHTML;
+                sendBillZaloBtn.innerHTML = '<span class="material-symbols-outlined text-sm">check</span><span>BẢN GỐC ĐÃ CHÉP & ĐANG MỞ ZALO...</span>';
+                setTimeout(() => { sendBillZaloBtn.innerHTML = originalText; }, 3000);
+            };
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(fullText).then(triggerSuccess).catch(err => {
+                    console.error("Clipboard API Error:", err);
+                    fallbackCopyText(fullText, triggerSuccess);
+                });
+            } else {
+                fallbackCopyText(fullText, triggerSuccess);
+            }
         });
     }
 
-    // Existing Copy & Transfer button logic
-    const copyBtn = document.getElementById('copy-stk-btn');
-    if (copyBtn) {
-        copyBtn.addEventListener('click', () => {
-            const accountNumber = (payosData && payosData.accountNumber) ? payosData.accountNumber : "0173100004750004";
-            navigator.clipboard.writeText(accountNumber).then(() => {
-                const originalText = copyBtn.innerHTML;
-                copyBtn.innerHTML = '<span class="material-symbols-outlined text-sm">check</span><span>Đã chép</span>';
-                setTimeout(() => { copyBtn.innerHTML = originalText; }, 2000);
-            }).catch(err => {
-                console.error("Clipboard Error:", err);
-                alert("STK: " + accountNumber);
-            });
-        });
-    }
 });
+

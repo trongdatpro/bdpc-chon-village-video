@@ -125,9 +125,7 @@
 
         #booking-warning.active {
             color: #ef4444 !important;
-            /* Error red */
-            font-weight: 800;
-            transform: scale(1.05);
+            font-weight: 700;
         }
     </style>
 </head>
@@ -253,7 +251,7 @@
                         <!-- Footnote & Warning (Absolute inside button area) -->
                         <div class="absolute -bottom-5 left-0 w-full pointer-events-none flex flex-col items-center">
                             <p id="booking-warning"
-                                class="text-[12px] text-center font-bold italic leading-tight transition-all duration-300"
+                                class="text-[11px] text-center font-bold italic leading-tight transition-all duration-300"
                                 style="color: #8B4513;">
                                 Chồn ưu tiên nhận đặt phòng từ 2 đêm. Với đặt phòng 1 đêm, vui lòng liên hệ Zalo.
                             </p>
@@ -297,7 +295,7 @@
 
         <!-- Main Toggle Button -->
         <button id="contact-toggle-btn"
-            class="group relative flex h-10 w-10 flex-col items-center justify-center rounded-full bg-primary text-white shadow-xl border-2 border-white transition-transform hover:scale-105 z-10">
+            class="group relative flex h-10 w-10 flex-col items-center justify-center rounded-full bg-primary text-white shadow-xl border-2 border-white transition-transform hover:scale-105 z-10 animate-bounce-subtle">
             <span class="text-[9px] font-bold uppercase tracking-wider leading-none text-center">Liên Hệ</span>
         </button>
     </div>
@@ -351,6 +349,24 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            const fetchJSONP = (url) => new Promise((resolve) => {
+                const cbName = 'gvizCb_' + Date.now() + Math.floor(Math.random() * 10000);
+                const s = document.createElement('script');
+                const timeout = setTimeout(() => {
+                    delete window[cbName];
+                    if (s.parentNode) document.head.removeChild(s);
+                    resolve(null);
+                }, 10000);
+                window[cbName] = (res) => {
+                    clearTimeout(timeout);
+                    delete window[cbName];
+                    if (s.parentNode) document.head.removeChild(s);
+                    resolve(res);
+                };
+                s.src = url + (url.includes('?') ? '&' : '?') + 'tqx=out:json;responseHandler:' + cbName;
+                document.head.appendChild(s);
+            });
+
             try {
                 const checkinInput = document.getElementById('checkin-date');
                 const checkoutInput = document.getElementById('checkout-date');
@@ -497,25 +513,46 @@
                 const submitText = document.getElementById('submit-text');
 
                 const POLICY_API = "https://docs.google.com/spreadsheets/d/1jszKQ6uZOqk-MD0vy--9NqISDuUDau6-gyx-KO1wck4/gviz/tq?gid=1382126270";
+                const URL_SCHEDULES = [
+                    '', // T1
+                    '', // T2
+                    'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=1441677072', // T3
+                    'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=2011761073', // T4
+                    'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=1564983873', // T5
+                    'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=1882992325', // T6
+                    'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=682502335',  // T7
+                    'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=926390804',  // T8
+                    'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=382926038',  // T9
+                    'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=1549710105', // T10
+                    'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=654600068',  // T11
+                    'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=1543178625'  // T12
+                ];
 
-                const fetchJSONP = (url) => new Promise((resolve) => {
-                    const cbName = 'gvizCb_' + Date.now() + Math.floor(Math.random() * 10000);
-                    const s = document.createElement('script');
-                    const timeout = setTimeout(() => {
-                        delete window[cbName];
-                        if (s.parentNode) document.head.removeChild(s);
-                        resolve(null);
-                    }, 10000); // 10s timeout
-                    window[cbName] = (res) => {
-                        clearTimeout(timeout);
-                        delete window[cbName];
-                        if (s.parentNode) document.head.removeChild(s);
-                        resolve(res);
-                    };
-                    s.src = url + (url.includes('?') ? '&' : '?') + 'tqx=out:json;responseHandler:' + cbName;
-                    document.head.appendChild(s);
-                });
+                // --- CACHING & PREFETCHING (Optimized v11.18) ---
+                window.policyCache = null;
+                window.scheduleCache = {};
 
+                const preFetchData = async () => {
+                    fetchJSONP(POLICY_API + "&t=" + Date.now()).then(res => {
+                        if (res && res.table && res.table.rows) {
+                            window.policyCache = res.table.rows.map(row => ({
+                                Month_ID: row.c[0] ? row.c[0].v : null,
+                                Min_Days_Lead: row.c[1] ? row.c[1].v : null
+                            })).filter(p => p.Month_ID !== null);
+                        }
+                    });
+
+                    // Fetch current and next month by default
+                    const today = new Date();
+                    const m1 = today.getMonth() + 1;
+                    const m2 = (m1 % 12) + 1;
+                    [m1, m2].forEach(m => {
+                        fetchJSONP(URL_SCHEDULES[m - 1] + "&t=" + Date.now()).then(res => {
+                            if (res && res.table && res.table.rows) window.scheduleCache[m] = res;
+                        });
+                    });
+                };
+                preFetchData();
 
                 const triggerWarningEffect = () => {
                     if (!bookingWarning) return;
@@ -566,140 +603,110 @@
                             return;
                         }
 
-                        // --- 1-NIGHT POLICY SYNC (v11.17 Final Edition) ---
+                        // --- 1-NIGHT POLICY SYNC (v11.18 - INSTANT CACHE EDITION) ---
                         if (diffDays === 1) {
-                            try {
-                                const today = new Date();
-                                today.setHours(0, 0, 0, 0);
-                                const daysLead = Math.ceil((checkinDateObj - today) / (1000 * 60 * 60 * 24));
-                                const monthId = checkinDateObj.getMonth() + 1;
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            const daysLead = Math.ceil((checkinDateObj - today) / (1000 * 60 * 60 * 24));
+                            const mId = checkinDateObj.getMonth() + 1;
 
-                                // 1. Fetch Dynamic Policy
-                                const policyResponse = await fetchJSONP(POLICY_API);
-                                let minDaysLead = 7;
-                                if (policyResponse && policyResponse.table && policyResponse.table.rows) {
-                                    const colMonth = 0; const colMinDays = 1;
-                                    const parsedPolicy = policyResponse.table.rows.map(row => ({
-                                        Month_ID: row.c[colMonth] ? row.c[colMonth].v : null,
-                                        Min_Days_Lead: row.c[colMinDays] ? row.c[colMinDays].v : null
-                                    }));
-                                    const mPolicy = parsedPolicy.find(p => p.Month_ID === monthId);
-                                    if (mPolicy && mPolicy.Min_Days_Lead !== null) {
-                                        minDaysLead = mPolicy.Min_Days_Lead;
+                            // 1. Get Policy from cache or fallback
+                            const mPolicy = (window.policyCache || []).find(p => p.Month_ID === mId);
+                            const minDaysLead = (mPolicy && mPolicy.Min_Days_Lead !== null) ? mPolicy.Min_Days_Lead : 7;
+
+                            if (daysLead > minDaysLead) {
+                                // 2. Get Schedule from cache or fetch on-demand
+                                try {
+                                    let scheduleRes = window.scheduleCache[mId];
+                                    if (!scheduleRes) {
+                                        // Fallback to on-demand if cache missed (unlikely)
+                                        scheduleRes = await fetchJSONP(URL_SCHEDULES[mId - 1]);
                                     }
-                                }
 
-                                if (daysLead > minDaysLead) {
-                                    // 2. Fetch Schedule to verify 1-night Gap
-                                    const URL_SCHEDULES = [
-                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=1441677072', // T1
-                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=2011761073', // T2
-                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=214041162',  // T3
-                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=1119565576', // T4
-                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=1564983873', // T5
-                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=1882992325', // T6
-                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=682502335',  // T7
-                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=926390804',  // T8
-                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=382926038',  // T9
-                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=1549710105', // T10
-                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=654600068',  // T11
-                                        'https://docs.google.com/spreadsheets/d/1A-DGSU4oPx74xdzloBQW4ekyhcjATwgh6dKf0Ky0XKg/gviz/tq?gid=1543178625'  // T12
-                                    ];
+                                    const coMonthId = checkoutDateObj.getMonth() + 1;
+                                    let coScheduleRes = window.scheduleCache[coMonthId] || scheduleRes;
+                                    if (coMonthId !== mId && !window.scheduleCache[coMonthId]) {
+                                        coScheduleRes = await fetchJSONP(URL_SCHEDULES[coMonthId - 1]);
+                                    }
 
-                                    const scheduleResponse = await fetchJSONP(URL_SCHEDULES[monthId - 1]);
-                                    const checkoutMonthId = checkoutDateObj.getMonth() + 1;
-                                    const checkoutScheduleResponse = (checkoutMonthId !== monthId) ? await fetchJSONP(URL_SCHEDULES[checkoutMonthId - 1]) : scheduleResponse;
-                                    
-                                    if (scheduleResponse && scheduleResponse.table && scheduleResponse.table.rows && checkoutScheduleResponse) {
-                                        const getStr = d => {
-                                            const yy = d.getFullYear(); const mm = String(d.getMonth() + 1).padStart(2, '0'); const dd = String(d.getDate()).padStart(2, '0');
-                                            return `${yy}-${mm}-${dd}`;
-                                        };
-                                        const ciStr = getStr(checkinDateObj);
-                                        const coStr = getStr(checkoutDateObj);
-
-                                        const parseDateStr = (val, formatted) => {
-                                            if (typeof val === 'string' && val.startsWith('Date(')) {
-                                                const parts = val.substring(5, val.length - 1).split(',');
-                                                return `${parts[0]}-${String(parseInt(parts[1]) + 1).padStart(2, '0')}-${String(parseInt(parts[2])).padStart(2, '0')}`;
-                                            }
-                                            let s = String(formatted || val).trim().split(' ')[0];
-                                            if (s.includes('/')) {
-                                                const parts = s.split('/');
-                                                if (parts[2] && parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-                                                if (parts[0] && parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-                                            } else if (s.includes('-')) {
-                                                const parts = s.split('-');
-                                                if (parts[0] && parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-                                            }
-                                            return s;
-                                        };
+                                    if (scheduleRes && scheduleRes.table) {
+                                        const ciStr = checkinVal; // YYYY-MM-DD
+                                        const coStr = checkoutVal; // YYYY-MM-DD
+                                        
+                                        const prDate = new Date(checkinDateObj);
+                                        prDate.setDate(prDate.getDate() - 1);
+                                        const prStr = `${prDate.getFullYear()}-${String(prDate.getMonth() + 1).padStart(2, '0')}-${String(prDate.getDate()).padStart(2, '0')}`;
 
                                         const ciStatuses = {};
                                         const coStatuses = {};
-
-                                        const processSheet = (res, targetMap) => {
-                                            res.table.rows.forEach(row => {
-                                                if (!row.c || row.c.length < 3) return;
-                                                const val = row.c[0] ? row.c[0].v : null;
-                                                const formatted = row.c[0] ? row.c[0].f : null;
-                                                const rId = row.c[1] ? row.c[1].v : null;
-                                                const status = row.c[2] ? row.c[2].v : null;
-                                                if (!val || !rId || !status) return;
-
-                                                const dateStr = parseDateStr(val, formatted);
-                                                const cleanRid = String(rId).trim().replace(/ /g, '_');
-                                                
-                                                if (!targetMap[cleanRid]) targetMap[cleanRid] = {};
-                                                targetMap[cleanRid][dateStr] = String(status).trim();
-                                            });
-                                        };
-
-                                        processSheet(scheduleResponse, ciStatuses);
-                                        if (checkoutMonthId !== monthId) {
-                                            processSheet(checkoutScheduleResponse, coStatuses);
-                                        } else {
-                                            Object.assign(coStatuses, ciStatuses);
-                                        }
-
-                                        let hasAvailableRoomsOnCheckin = false;
-                                        let hasValidGapRoom = false;
+                                        const prStatuses = {};
 
                                         const isBooked = (status) => {
                                             if (!status) return false;
-                                            const s = String(status).toLowerCase();
+                                            const s = String(status).toLowerCase().normalize('NFC').trim();
                                             if (s.includes('hủy')) return false;
                                             return s.includes('đặt') || s.includes('cọc') || s.includes('thanh toán') || s.includes('đóng') || s.includes('booked') || s === 'b';
                                         };
 
-                                        // We check every room present in ciStatuses
-                                        Object.keys(ciStatuses).forEach(roomId => {
-                                            const statusCi = ciStatuses[roomId][ciStr];
-                                            let statusCo = null;
-                                            if (coStatuses[roomId]) {
-                                                statusCo = coStatuses[roomId][coStr];
+                                        const parseDateStrLocal = (val, formatted) => {
+                                            if (typeof val === 'string' && val.startsWith('Date(')) {
+                                                const parts = val.substring(5, val.length - 1).split(',');
+                                                return `${parts[0]}-${String(parseInt(parts[1]) + 1).padStart(2, '0')}-${String(parseInt(parts[2])).padStart(2, '0')}`;
                                             }
+                                            return String(formatted || val).trim().split(' ')[0];
+                                        };
 
-                                            if (!isBooked(statusCi)) {
-                                                hasAvailableRoomsOnCheckin = true;
-                                                // Requirement: NEXT night MUST be booked to fill gap
-                                                if (isBooked(statusCo)) {
-                                                    hasValidGapRoom = true;
+                                        // Process schedules
+                                        const process = (res, target) => {
+                                            res.table.rows.forEach(r => {
+                                                if (r.c && r.c[0] && r.c[1]) {
+                                                    const dStr = parseDateStrLocal(r.c[0].v, r.c[0].f);
+                                                    const rId = String(r.c[1].v).trim().replace(/ /g, '_');
+                                                    if (!target[rId]) target[rId] = {};
+                                                    target[rId][dStr] = String(r.c[2] ? r.c[2].v : "").trim();
                                                 }
+                                            });
+                                        };
+
+                                        process(scheduleRes, ciStatuses);
+                                        if (coMonthId !== mId) process(coScheduleRes, coStatuses); else Object.assign(coStatuses, ciStatuses);
+                                        
+                                        // For PR status, we might need a 3rd month if checkin is the 1st
+                                        const prMonthId = prDate.getMonth() + 1;
+                                        if (prMonthId !== mId && prMonthId !== coMonthId) {
+                                            const prRes = window.scheduleCache[prMonthId] || await fetchJSONP(URL_SCHEDULES[prMonthId - 1]);
+                                            if (prRes) process(prRes, prStatuses);
+                                        } else if (prMonthId === mId) {
+                                            Object.assign(prStatuses, ciStatuses);
+                                        } else {
+                                            Object.assign(prStatuses, coStatuses);
+                                        }
+
+                                        let hasAvailableRoomsOnCheckin = false;
+                                        let hasValidTripleGap = false;
+
+                                        Object.keys(ciStatuses).forEach(roomId => {
+                                            const sCi = ciStatuses[roomId][ciStr];
+                                            const sCo = coStatuses[roomId] ? coStatuses[roomId][coStr] : null;
+                                            const sPr = prStatuses[roomId] ? prStatuses[roomId][prStr] : null;
+
+                                            if (!isBooked(sCi)) {
+                                                hasAvailableRoomsOnCheckin = true;
+                                                if (isBooked(sPr) && isBooked(sCo)) hasValidTripleGap = true;
                                             }
                                         });
 
-                                        if (hasAvailableRoomsOnCheckin && !hasValidGapRoom) {
+                                        if (hasAvailableRoomsOnCheckin && !hasValidTripleGap) {
                                             if (bookingWarning) {
-                                                bookingWarning.textContent = "Chồn ưu tiên nhận đặt phòng từ 2 đêm. Với đặt phòng 1 đêm, vui lòng liên hệ Zalo.";
+                                                bookingWarning.textContent = "Chồn ưu tiên nhận đặt phòng từ 2 đêm. Với đặt phòng 1 đêm, vui lòng liên hệ Zalo.";
                                             }
                                             triggerWarningEffect();
-                                            return; // BLOCK submission
+                                            return; // BLOCK
                                         }
                                     }
+                                } catch (e) {
+                                    console.error("Instant validation failed", e);
                                 }
-                            } catch (e) {
-                                console.error("Error checking gap filler on index", e);
                             }
                         }
 
@@ -721,6 +728,7 @@
         });
     </script>
 
+    <script src="history-bubble.js"></script>
 </body>
 
 </html>

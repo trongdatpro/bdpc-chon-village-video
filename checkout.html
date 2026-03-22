@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 
-<html lang="vi">
+<html lang="vi" class="notranslate" translate="no">
 
 <head>
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <meta name="google" content="notranslate" />
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Playfair+Display:ital,wght@0,700;1,700&amp;display=swap"
@@ -54,6 +55,13 @@
             color: #c8a96a;
             pointer-events: none;
         }
+
+        /* Fix mobile tap highlight */
+        .tap-target {
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            user-select: none;
+        }
     </style>
     <style>
         body {
@@ -64,10 +72,10 @@
 
 <body class="bg-ivory font-display text-graphite dark:text-slate-100 min-h-screen flex flex-col">
     <!-- Header -->
-    <header class="flex items-center bg-background-light dark:bg-background-dark p-4 pb-2 sticky top-0 z-10">
-        <div class="text-primary flex size-12 shrink-0 items-center cursor-pointer">
-            <span class="material-symbols-outlined">arrow_back_ios</span>
-        </div>
+    <header class="flex items-center bg-background-light dark:bg-background-dark p-4 pb-2 sticky top-0 z-50 shadow-sm border-b border-primary/10">
+        <a href="index.html" class="text-primary flex size-12 shrink-0 items-center justify-center tap-target hover:bg-primary/10 rounded-full transition-all active:scale-90 notranslate" translate="no">
+            <span class="material-symbols-outlined ml-2 notranslate" translate="no">arrow_back_ios</span>
+        </a>
         <h1
             class="font-serif italic text-2xl font-bold leading-tight tracking-tight flex-1 text-center pr-12 text-primary">
             Xác Nhận Đặt Phòng
@@ -127,16 +135,15 @@
                 <h2 class="font-serif text-lg font-bold mb-4 text-primary">Thông tin đặt phòng</h2>
                 
                 <!-- Dynamic Room List Container -->
-                <div id="checkout-rooms-list" class="space-y-6 mb-8">
+                <div id="checkout-rooms-list" class="space-y-4 mb-6">
                     <!-- Room cards will be injected here -->
                 </div>
 
                 <!-- Styled Single Frame for Totals and Payment -->
-                <div class="p-6 bg-primary/5 rounded-xl border-2 border-primary/30 shadow-md space-y-6">
+                <div class="p-5 bg-primary/5 rounded-xl border-2 border-primary/30 shadow-md space-y-4">
                     <!-- Grand Total Section -->
-                    <div class="space-y-4 border-b border-primary/20 pb-6">
                         <div class="flex justify-center items-center">
-                            <span class="text-base font-serif font-bold text-primary text-center">Tất cả chi phí đã bao gồm phụ thu (nếu có)</span>
+                            <span class="text-[13px] font-serif font-bold text-primary text-center leading-tight">Tất cả chi phí đã bao gồm phụ thu (nếu có)</span>
                         </div>
                         <div class="flex justify-between items-center">
                             <span class="text-base font-serif font-bold text-primary">Tổng cộng tất cả:</span>
@@ -146,58 +153,45 @@
                             <span class="text-base font-serif font-bold text-primary">Tiền đặt cọc (50%):</span>
                             <span id="checkout-deposit" class="text-base font-serif font-bold text-primary">...</span>
                         </div>
-                    </div>
 
                     <!-- Payment Details Section -->
                     <div id="payment-section" class="hidden transition-opacity duration-500 opacity-0 space-y-6">
-                        <h2 class="font-serif text-base font-bold text-primary text-center uppercase tracking-widest">Thanh toán cọc 50%</h2>
+                        
                         
                         <div class="flex flex-col items-center gap-6">
                             <!-- PayOS QR & Info Block -->
-                            <div class="bg-white p-6 rounded-2xl shadow-xl border-2 border-primary/20 w-full max-w-sm mx-auto text-center space-y-6">
-                                <div id="payos-qr-container" class="relative bg-white p-3 rounded-xl border border-primary/10 shadow-inner flex items-center justify-center min-h-[250px]">
+                            <div class="bg-white px-2 py-5 rounded-2xl shadow-xl border-2 border-primary/20 w-full max-w-sm mx-auto text-center space-y-3">
+                                <div id="payos-qr-container" class="relative bg-white p-3 rounded-xl border border-primary/10 shadow-inner flex items-center justify-center min-h-[300px]">
                                     <img id="checkout-qr" src="" alt="QR Thanh toán" class="w-full h-auto object-contain hidden" />
                                     <div id="qr-loading" class="flex flex-col items-center gap-2">
-                                        <span class="material-symbols-outlined animate-spin text-primary">sync</span>
-                                        <span class="text-[10px] text-primary/60 font-medium">Đang tạo mã thanh toán...</span>
+                                        <span class="material-symbols-outlined animate-spin text-primary text-3xl">sync</span>
+                                        <span class="text-[11px] text-primary/60 font-bold uppercase tracking-widest">Đang tạo mã thanh toán VietQR...</span>
                                     </div>
                                 </div>
 
-                                <!-- Status Indicator (Beneath QR) -->
-                                <div id="payment-status-indicator" class="flex flex-col items-center gap-1 hidden transition-opacity duration-300">
-                                    <div class="flex items-center gap-2">
-                                        <span class="material-symbols-outlined animate-spin text-primary text-sm">sync</span>
-                                        <span id="payment-status-text" class="text-[10px] text-primary font-bold uppercase tracking-tight">Đang chờ thanh toán...</span>
-                                    </div>
-                                    <button id="manual-check-btn" class="text-[10px] text-primary/60 underline font-medium hover:text-primary transition-colors">Kiểm tra lại ngay</button>
-                                </div>
-
-                                <div class="space-y-3">
-                                    <div class="flex flex-col items-center">
-                                        <span class="text-[10px] uppercase tracking-widest text-primary/50 font-bold">Ngân hàng</span>
-                                        <span id="payos-bank-name" class="text-sm font-serif font-bold text-primary">Ngân hàng TMCP Phương Đông (OCB)</span>
-                                    </div>
-                                    <div class="flex flex-col items-center">
-                                        <span class="text-[10px] uppercase tracking-widest text-primary/50 font-bold">Số tài khoản</span>
-                                        <span id="payos-account-no" class="text-xl font-serif font-bold text-primary tracking-widest">...</span>
-                                    </div>
-                                    <div class="flex flex-col items-center">
-                                        <span class="text-[10px] uppercase tracking-widest text-primary/50 font-bold">Chủ tài khoản</span>
-                                        <span id="payos-account-name" class="text-sm font-serif font-bold uppercase text-primary">...</span>
-                                    </div>
-                                </div>
-
-                                <!-- Action Buttons: Copy & Transfer -->
-                                <div class="grid grid-cols-2 gap-4">
-                                    <button id="copy-stk-btn" class="flex items-center justify-center gap-2 bg-primary/10 hover:bg-primary/20 text-primary py-3 px-4 rounded-xl text-xs font-bold transition-all border border-primary/30 active:scale-95">
-                                        <span class="material-symbols-outlined text-sm">content_copy</span>
-                                        <span>Sao chép STK</span>
+                                <!-- NEW: QR Utility Actions (Download & Share) -->
+                                <div class="flex flex-col items-center gap-2">
+                                    <button id="download-qr-btn" class="w-44 flex flex-col items-center justify-center py-2.5 bg-[#FCF8F1] border border-[#C8A96A]/30 rounded-2xl text-[#C8A96A] transition-all active:scale-95 shadow-sm hover:brightness-95">
+                                        <span class="text-[11px] font-bold uppercase tracking-widest leading-none mb-1.5 whitespace-nowrap">Tải mã thanh toán</span>
+                                        <span class="material-symbols-outlined text-lg leading-none">download</span>
                                     </button>
-                                    <button id="transfer-app-btn" class="flex items-center justify-center gap-2 bg-primary text-white py-3 px-4 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 hover:shadow-lg">
-                                        <span class="material-symbols-outlined text-sm">account_balance</span>
-                                        <span>Chọn Ngân hàng Chuyển khoản</span>
+                                    
+                                    <button id="share-qr-btn" class="w-32 flex items-center justify-center gap-2 py-2 bg-[#FCF8F1] border border-[#C8A96A]/30 rounded-full text-[#C8A96A] text-[10px] font-bold uppercase transition-all active:scale-95 shadow-sm hover:brightness-95">
+                                        <span class="material-symbols-outlined text-base leading-none">share</span>
+                                        <span>Chia sẻ</span>
                                     </button>
+
+                                    <!-- Bank Selection Button (Vertical Layout: Maximized Width & Lowered Content) -->
+                                    <div class="flex justify-center w-full pt-1">
+                                        <button id="transfer-app-btn" class="w-full h-15 flex flex-col items-center justify-center pt-2.5 pb-2 gap-1 bg-[#C8A96A] text-white px-4 rounded-xl shadow-lg active:scale-95 hover:brightness-110 transition-all border border-white/20">
+                                            <span class="text-[10px] font-black uppercase tracking-widest leading-none mb-0.5 whitespace-nowrap">Chọn Ngân hàng Chuyển khoản</span>
+                                            <span class="material-symbols-outlined text-xl leading-none">account_balance</span>
+                                        </button>
+                                    </div>
                                 </div>
+
+                                <!-- Visual Separator -->
+                                <div class="h-px w-full border-t border-dashed border-primary/10 my-1"></div>
 
                                 <!-- Success Feedback (Hidden initially) -->
                                 <div id="payment-success-overlay" class="hidden opacity-0 border-t-2 border-dashed border-green-500/30 pt-6 mt-6 space-y-6">
@@ -210,11 +204,11 @@
 
                                     <!-- Info Collection Form -->
                                     <div id="info-collection-form" class="space-y-5 text-left bg-primary/5 p-4 rounded-xl border border-primary/10">
-                                        <p class="text-center text-[11px] font-bold text-primary uppercase tracking-tight">Xin vui lòng xác nhạn lại thông tin người đặt phòng.</p>
+                                        <p class="text-center text-[11px] font-bold text-primary uppercase tracking-tight">XIN VUI LÒNG XÁC NHẬN LẠI THÔNG TIN NGƯỜI ĐẶT PHÒNG.</p>
                                         
                                         <div class="space-y-3">
                                             <div class="space-y-1">
-                                                <label class="text-[9px] uppercase tracking-widest text-primary/60 font-bold ml-1">Họ và tên người đặt phòng</label>
+                                                <label class="text-[9px] uppercase tracking-widest text-primary/60 font-bold ml-1 whitespace-nowrap">Họ tên người nhận phòng</label>
                                                 <input type="text" id="guest-fullname" placeholder="Nhập họ tên..." 
                                                     class="w-full bg-white border border-primary/20 rounded-lg px-3 py-2.5 text-sm focus:border-primary focus:ring-0 transition-all font-medium" />
                                             </div>
@@ -239,12 +233,14 @@
                                             <!-- Bill text injected here -->
                                         </div>
 
-                                        <div class="p-3 bg-primary/5 flex gap-2">
-                                            <button id="copy-bill-btn" class="flex-1 flex items-center justify-center gap-2 bg-white border border-primary text-primary py-2.5 rounded-lg font-bold text-[10px] hover:bg-blue-50 transition-all active:scale-95 select-none touch-manipulation">
-                                                <span class="material-symbols-outlined text-sm pointer-events-none">content_copy</span>
-                                                <span class="pointer-events-none">SAO CHÉP BILL</span>
-                                            </button>
-                                            <a href="index.html" class="flex-1 px-4 py-2.5 bg-primary text-white text-[10px] font-bold rounded-lg flex items-center justify-center text-center select-none active:scale-95 transition-all">HOÀN TẤT</a>
+                                        <div class="p-3 bg-primary/5 flex flex-col gap-3">
+                                            <a id="send-bill-zalo-btn" href="https://zalo.me/0889717713" target="_blank" class="w-full px-4 py-3 bg-primary text-white text-[11px] font-bold rounded-lg flex items-center justify-center text-center select-none active:scale-95 transition-all uppercase tracking-widest shadow-md">
+                                                <span class="material-symbols-outlined text-sm mr-2">send</span>
+                                                GỬI BILL CHO CHỒN
+                                            </a>
+                                            <p class="text-[11px] text-center text-primary font-medium italic leading-relaxed px-2">
+                                                Xin anh chị vui lòng gửi bill cho Chồn để hoàn tất việc đặt phòng nhé (^.^)
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
@@ -302,29 +298,35 @@
                 <span>Tôi đã chuyển khoản - Gửi Biên Lai Zalo</span>
                 <span class="material-symbols-outlined">send</span>
             </button>
-            <p class="mt-4 text-[10px] text-center text-primary italic opacity-60">
-                * Xác nhận sẽ được gửi qua Zalo ngay sau khi hệ thống ghi nhận.
-            </p>
+
         </div>
     </main>
     <!-- Bottom Navigation Bar -->
-    <nav class="border-t border-primary/10 bg-background-light dark:bg-background-dark px-4 pb-6 pt-2">
+    <nav class="relative border-t-0 bg-background-light dark:bg-background-dark px-4 pb-3 pt-1">
+        <!-- Decorative Top Line (Improved: Fading ends + Slightly thicker) -->
+        <div class="absolute top-0 left-0 w-full flex items-center justify-center -translate-y-1/2 pointer-events-none px-4">
+            <div class="flex-1 h-[1.5px] bg-gradient-to-r from-transparent via-[#c8aa6a]/80 to-[#c8aa6a]/80"></div>
+            <div class="mx-3">
+                <div class="w-3 h-3 border-2 border-[#c8aa6a]/80 rotate-45"></div>
+            </div>
+            <div class="flex-1 h-[1.5px] bg-gradient-to-l from-transparent via-[#c8aa6a]/80 to-[#c8aa6a]/80"></div>
+        </div>
         <div class="flex gap-2">
-            <a class="flex flex-1 flex-col items-center justify-end gap-1 text-primary/60" href="index.html">
-                <span class="material-symbols-outlined">home</span>
-                <p class="text-[10px] font-medium leading-normal tracking-wide">Trang chủ</p>
+            <a class="flex flex-1 flex-col items-center justify-end gap-0.5 text-primary/60" href="index.html">
+                <span class="material-symbols-outlined text-[20px]">home</span>
+                <p class="text-[9px] font-medium leading-normal tracking-wide">Trang chủ</p>
             </a>
-            <a class="flex flex-1 flex-col items-center justify-end gap-1 text-primary" href="rooms.html">
-                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1">calendar_month</span>
-                <p class="text-[10px] font-medium leading-normal tracking-wide">Đặt phòng</p>
+            <a class="flex flex-1 flex-col items-center justify-end gap-0.5 text-primary" href="rooms.html">
+                <span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1">calendar_month</span>
+                <p class="text-[9px] font-medium leading-normal tracking-wide">Đặt phòng</p>
             </a>
-            <a class="flex flex-1 flex-col items-center justify-end gap-1 text-primary/60" href="#">
-                <span class="material-symbols-outlined">notifications</span>
-                <p class="text-[10px] font-medium leading-normal tracking-wide">Thông báo</p>
+            <a class="flex flex-1 flex-col items-center justify-end gap-0.5 text-primary/60" href="#">
+                <span class="material-symbols-outlined text-[20px]">notifications</span>
+                <p class="text-[9px] font-medium leading-normal tracking-wide">Thông báo</p>
             </a>
-            <a class="flex flex-1 flex-col items-center justify-end gap-1 text-primary/60" href="#">
-                <span class="material-symbols-outlined">person</span>
-                <p class="text-[10px] font-medium leading-normal tracking-wide">Cá nhân</p>
+            <a class="flex flex-1 flex-col items-center justify-end gap-0.5 text-primary/60" href="#">
+                <span class="material-symbols-outlined text-[20px]">person</span>
+                <p class="text-[9px] font-medium leading-normal tracking-wide">Cá nhân</p>
             </a>
         </div>
     </nav>
@@ -336,20 +338,20 @@
     <script src="checkout.js?v=2.6"></script>
 
     <!-- Floating Contact Action Button -->
-    <div id="floating-contact-container" class="fixed bottom-24 right-2 z-50 flex items-center justify-end">
+    <div id="floating-contact-container" class="fixed bottom-24 right-1 z-50 flex flex-col-reverse items-center gap-3">
         <!-- Hidden sliding icons -->
         <div id="contact-icons-slide"
-            class="flex items-center gap-3 mr-4 opacity-0 translate-x-10 pointer-events-none transition-all duration-300 ease-out">
+            class="group flex flex-col-reverse items-center gap-3 opacity-0 translate-y-10 pointer-events-none transition-all duration-500 ease-out">
             <!-- Phone Button -->
             <a href="tel:0889717713"
-                class="group relative flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-xl border-2 border-primary transition-transform hover:scale-110">
-                <span class="material-symbols-outlined text-primary text-2xl">call</span>
+                class="relative flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-xl border-2 border-primary transition-all duration-500 delay-[0ms] scale-0 rotate-[360deg] group-[.opacity-100]:scale-100 group-[.opacity-100]:rotate-0 hover:scale-110 active:scale-95">
+                <span class="material-symbols-outlined text-primary text-xl">call</span>
             </a>
 
             <!-- Fanpage Button -->
             <a href="https://www.facebook.com/profile.php?id=61575491687268" target="_blank"
-                class="group relative flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-xl border-2 border-primary transition-transform hover:scale-110">
-                <svg class="h-6 w-6 fill-[#1877F2]" viewBox="0 0 24 24">
+                class="relative flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-xl border-2 border-primary transition-all duration-500 delay-[100ms] scale-0 rotate-[360deg] group-[.opacity-100]:scale-100 group-[.opacity-100]:rotate-0 hover:scale-110 active:scale-95">
+                <svg class="h-5 w-5 fill-[#1877F2]" viewBox="0 0 24 24">
                     <path
                         d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
                 </svg>
@@ -357,8 +359,8 @@
 
             <!-- Zalo Button -->
             <a href="https://zalo.me/0889717713" target="_blank"
-                class="group relative flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-xl border-2 border-primary transition-transform hover:scale-110">
-                <img class="h-7 w-7 object-contain"
+                class="relative flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-xl border-2 border-primary transition-all duration-500 delay-[200ms] scale-0 rotate-[360deg] group-[.opacity-100]:scale-100 group-[.opacity-100]:rotate-0 hover:scale-110 active:scale-95">
+                <img class="h-6 w-6 object-contain"
                     src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Icon_of_Zalo.svg/1200px-Icon_of_Zalo.svg.png"
                     alt="Zalo" />
             </a>
@@ -366,9 +368,8 @@
 
         <!-- Main Toggle Button -->
         <button id="contact-toggle-btn"
-            class="group relative flex h-12 w-12 flex-col items-center justify-center rounded-full bg-primary text-white shadow-xl border-2 border-white transition-transform hover:scale-105 z-10">
-            <span class="material-symbols-outlined text-[20px] leading-none mb-0.5">forum</span>
-            <span class="text-[8px] font-bold uppercase tracking-wider leading-none">Liên Hệ</span>
+            class="group relative flex h-10 w-10 flex-col items-center justify-center rounded-full bg-primary text-white shadow-xl border-2 border-white transition-transform hover:scale-105 z-10 animate-bounce-subtle">
+            <span class="text-[9px] font-bold uppercase tracking-wider leading-none text-center">Liên Hệ</span>
         </button>
     </div>
 
@@ -381,31 +382,44 @@
 
             let isOpen = false;
 
-            const toggleContactMenu = (e) => {
+            const toggleContactMenu = (e, isPopState = false) => {
                 if (e) {
                     e.stopPropagation();
                 }
                 isOpen = !isOpen;
                 if (isOpen) {
-                    slidePanel.classList.remove('opacity-0', 'translate-x-10', 'pointer-events-none');
-                    slidePanel.classList.add('opacity-100', 'translate-x-0', 'pointer-events-auto');
+                    if (!isPopState) {
+                        history.pushState({ view: 'contact-menu' }, '');
+                    }
+                    slidePanel.classList.remove('opacity-0', 'translate-y-10', 'pointer-events-none');
+                    slidePanel.classList.add('opacity-100', 'translate-y-0', 'pointer-events-auto');
                 } else {
-                    slidePanel.classList.remove('opacity-100', 'translate-x-0', 'pointer-events-auto');
-                    slidePanel.classList.add('opacity-0', 'translate-x-10', 'pointer-events-none');
+                    if (!isPopState && history.state && history.state.view === 'contact-menu') {
+                        history.back();
+                    }
+                    slidePanel.classList.remove('opacity-100', 'translate-y-0', 'pointer-events-auto');
+                    slidePanel.classList.add('opacity-0', 'translate-y-10', 'pointer-events-none');
                 }
             };
 
             if (toggleBtn) {
-                toggleBtn.addEventListener('click', toggleContactMenu);
+                toggleBtn.addEventListener('click', (e) => toggleContactMenu(e));
             }
+
+            window.addEventListener('popstate', (event) => {
+                if (isOpen && (!event.state || event.state.view !== 'contact-menu')) {
+                    toggleContactMenu(null, true);
+                }
+            });
 
             document.addEventListener('click', (event) => {
                 if (isOpen && container && !container.contains(event.target)) {
-                    toggleContactMenu();
+                    toggleContactMenu(null);
                 }
             });
         });
     </script>
+    <script src="history-bubble.js"></script>
 </body>
 
 </html>

@@ -130,11 +130,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Formatting dates for display
     const formatDateObj = (d) => `${d.getDate()}/${d.getMonth() + 1}`;
-    document.getElementById('summary-dates').textContent = `${formatDateObj(checkinDate)} - ${formatDateObj(checkoutDate)}`;
+    const dateStr = `${formatDateObj(checkinDate)} - ${formatDateObj(checkoutDate)}`;
+    document.getElementById('summary-dates').textContent = dateStr;
+    const miniSummaryDates = document.getElementById('mini-summary-dates');
+    if (miniSummaryDates) miniSummaryDates.textContent = dateStr;
 
     let summaryGuestsStr = `${adults} Người lớn`;
     if (children > 0) summaryGuestsStr += `, ${children} Trẻ em`;
     document.getElementById('summary-guests').textContent = summaryGuestsStr;
+    const miniSummaryGuests = document.getElementById('mini-summary-guests');
+    if (miniSummaryGuests) miniSummaryGuests.textContent = summaryGuestsStr;
 
     const roomsContainer = document.getElementById('rooms-container');
     roomsContainer.innerHTML = `
@@ -428,6 +433,142 @@ document.addEventListener('DOMContentLoaded', async () => {
         return new Intl.NumberFormat('vi-VN').format(num);
     }
 
+    // --- SMART SUGGESTION ENGINE ---
+    function findSmartSuggestions(checkinDate, checkoutDate, adults, children) {
+        const originalNights = [];
+        let currDate = new Date(checkinDate);
+        while (currDate < checkoutDate) {
+            originalNights.push(getStr(currDate));
+            currDate.setDate(currDate.getDate() + 1);
+        }
+
+        const rangeStart = new Date(checkinDate);
+        rangeStart.setDate(rangeStart.getDate() - 4);
+        const rangeEnd = new Date(checkinDate);
+        rangeEnd.setDate(rangeEnd.getDate() + 4);
+
+        const roomAvailability = [];
+
+        localRooms.forEach(room => {
+            const freeDatesInRange = [];
+            let scanDate = new Date(rangeStart);
+            while (scanDate <= rangeEnd) {
+                const dateStr = getStr(scanDate);
+                const isBookedOnDate = isBooked(scheduleData[room.id] ? scheduleData[room.id][dateStr] : null);
+                if (!isBookedOnDate) {
+                    freeDatesInRange.push(new Date(scanDate));
+                }
+                scanDate.setDate(scanDate.getDate() + 1);
+            }
+
+            if (freeDatesInRange.length > 0) {
+                // Check if this room covers ANY of the original nights
+                const coveredNights = originalNights.filter(nightStr => 
+                    freeDatesInRange.some(fd => getStr(fd) === nightStr)
+                );
+
+                roomAvailability.push({
+                    room,
+                    freeDates: freeDatesInRange,
+                    coveredNights: coveredNights,
+                    isSwitchCandidate: coveredNights.length > 0 && coveredNights.length < originalNights.length
+                });
+            }
+        });
+
+        // Limit results to best matches to avoid flooding. Sort by coverage first, then by total free days.
+        return roomAvailability.sort((a,b) => {
+            if (b.coveredNights.length !== a.coveredNights.length) {
+                return b.coveredNights.length - a.coveredNights.length;
+            }
+            return b.freeDates.length - a.freeDates.length;
+        }).slice(0, 5);
+    }
+
+    function formatFreeDates(dates) {
+        if (!dates || dates.length === 0) return "";
+        
+        // Group consecutive dates
+        const groups = [];
+        let currentGroup = [dates[0]];
+
+        for (let i = 1; i < dates.length; i++) {
+            const prev = dates[i - 1];
+            const curr = dates[i];
+            const diff = (curr - prev) / (1000 * 60 * 60 * 24);
+            
+            if (diff === 1) {
+                currentGroup.push(curr);
+            } else {
+                groups.push(currentGroup);
+                currentGroup = [curr];
+            }
+        }
+        groups.push(currentGroup);
+
+        return groups.map((group, idx) => {
+            if (group.length === 1) return group[0].getDate().toString();
+            // 21, 22, 23 và 24
+            const dayNumbers = group.map(d => d.getDate());
+            const lastDay = dayNumbers.pop();
+            return dayNumbers.join(', ') + ' và ' + lastDay;
+        }).join(' hoặc ');
+    }
+
+    // --- REUSABLE CARD GENERATOR ---
+    function buildRoomCardHTML(room, roomImg, amenitiesHtml, specialAttrHtml, priceHtml, buttonHtml, extraInfoHtml = "") {
+        return `
+            <div class="rococo-border bg-white shadow-sm overflow-hidden group scroll-animate-card h-full flex flex-col">
+                <div class="acanthus-corner top-0 left-0">
+                    <svg fill="currentColor" viewbox="0 0 24 24"><path d="M2,2 L10,2 C6,2 2,6 2,10 L2,2 Z"></path></svg>
+                </div>
+                <div class="acanthus-corner top-0 right-0 rotate-90">
+                    <svg fill="currentColor" viewbox="0 0 24 24"><path d="M2,2 L10,2 C6,2 2,6 2,10 L2,2 Z"></path></svg>
+                </div>
+                <!-- Featured Image with Gallery Trigger -->
+                <div class="relative h-60 overflow-hidden border-4 border-double border-primary/60 m-2 rounded-sm cursor-pointer group/img shrink-0"
+                     onclick='openGallery("${room.id}")'>
+                    <img id="img-${room.id}" alt="${room.name}" 
+                         class="w-full h-full object-cover transition-transform duration-700 group-hover/img:scale-110" 
+                         src="${roomImg}"
+                         onerror="this.style.opacity='0'"/>
+                    
+                    <!-- Subtle Media Count Badge (Bottom Corner) -->
+                    ${window.galleryData[room.id] ? `
+                        <div class="absolute bottom-3 right-3 bg-black/60 text-white text-[11px] font-display px-3 py-1.5 rounded-sm backdrop-blur-md border border-white/20 flex items-center gap-2 shadow-xl">
+                            <span class="material-symbols-outlined text-[14px]">photo_camera</span>
+                            <span>1 / ${window.galleryData[room.id].length}</span>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="px-5 pb-2.5 pt-0 flex-1 flex flex-col">
+                    <div class="flex justify-between items-start mb-0 -mt-3">
+                        <h3 class="font-display text-2xl font-bold text-graphite">${room.name}</h3>
+                    </div>
+                    <div class="flex flex-wrap gap-x-4 gap-y-0 mt-1 mb-0 text-sm text-slate-500">
+                        <div class="flex items-center gap-1">
+                            <span class="material-symbols-outlined text-xl text-primary">square_foot</span>
+                            <span>${room.area}</span>
+                        </div>
+                        ${amenitiesHtml}
+                    </div>
+                    ${specialAttrHtml}
+                    <div class="h-px bg-primary/40 w-full mt-2"></div>
+                    
+                    <div class="flex items-end justify-between pt-1 mt-auto">
+                        ${priceHtml}
+                    </div>
+                    
+                    ${extraInfoHtml ? `<div class="mt-0.5">${extraInfoHtml}</div>` : ''}
+
+                    <div class="flex justify-center mt-3">
+                        ${buttonHtml}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     function renderRooms(roomsList, scheduleData, pricingData, datesToStay) {
         if (!datesToStay || datesToStay.length === 0) {
             return;
@@ -459,7 +600,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 // Track if any night in the stay is a holiday
                 const dayNote = (roomDayData.note || "").toLowerCase().normalize("NFC");
-                const isDayHoliday = /l[ễễe]/.test(dayNote) || dayNote.includes("holiday");
+                const isDayHoliday = /l[ễễe]/.test(dayNote) || dayNote.includes("holiday") || /\bl\b/.test(dayNote);
 
                 if (isDayHoliday) {
                     isHolidayStay = true;
@@ -549,20 +690,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             const isOneNightStay = datesToStay.length === 1;
 
             if (isOneNightStay) {
-                // 1-Night Rules: Must be either within the Last Minute period OR a perfect Gap-Filler (Checkout date is Booked)
-                const checkinStr = getStr(checkin);
+                // 1-Night Rules:
                 const ciDate = new Date(checkin);
+                
+                // Get Night Before Check-in
+                const prevDate = new Date(ciDate);
+                prevDate.setDate(prevDate.getDate() - 1);
+                const prevDateStr = getStr(prevDate);
+                const isBookedBefore = isBooked(scheduleData[room.id] ? scheduleData[room.id][prevDateStr] : null);
 
-                // Get next night (this is the checkout date for a 1-night stay)
+                // Get Night After Check-out (The next night)
                 const nextDate = new Date(ciDate);
                 nextDate.setDate(nextDate.getDate() + 1);
                 const nextDateStr = getStr(nextDate);
+                const isBookedAfter = isBooked(scheduleData[room.id] ? scheduleData[room.id][nextDateStr] : null);
 
-                const statusNext = scheduleData[room.id] ? scheduleData[room.id][nextDateStr] : null;
+                const isPerfectSandwich = isBookedBefore && isBookedAfter;
 
-                const isGapFiller = isBooked(statusNext);
-
-                if (isWithinPeriod || isGapFiller) {
+                if (isWithinPeriod || isPerfectSandwich) {
                     isAvailable = true;
                     // Capacity check for 1 room stay
                     if (totalGuests <= 3) {
@@ -571,7 +716,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 } else {
                     isAvailable = false;
-                    uiLog(`Room ${room.id}: Hidden (1-Night Not In Period & Checkout Not Booked)`);
+                    uiLog(`Room ${room.id}: Hidden (1-Night Not In Period & Not a Perfect Sandwich)`);
                 }
             } else {
                 // All other stays: Check capacity for small groups, allow all others to see rooms for multi-booking
@@ -623,7 +768,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             priceHtml = `
                 <div class="flex flex-col gap-0.5 -ml-3">
-                    <p class="text-[11px] text-slate-400 uppercase tracking-tight mb-1">Giá Niêm Yết</p>
+                    <p class="text-[11px] text-black uppercase tracking-tight mb-1">Giá Niêm Yết</p>
                     <div class="space-y-1">`;
 
             if (baseWeekday !== baseWeekend) {
@@ -631,11 +776,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 priceHtml += `
                     <div class="flex items-baseline gap-1 whitespace-nowrap">
                         <span class="text-[15px] font-bold text-graphite leading-none">${renderCurrency(baseWeekday)}</span>
-                        <span class="text-[12px] font-normal text-slate-500">/ Đêm Trong Tuần (Thứ 2 - Thứ 5)</span>
+                        <span class="text-[12px] font-normal text-black">/ Đêm Trong Tuần (Thứ 2 - Thứ 5)</span>
                     </div>
                     <div class="flex items-baseline gap-1 whitespace-nowrap">
                         <span class="text-[15px] font-bold text-graphite leading-none">${renderCurrency(baseWeekend)}</span>
-                        <span class="text-[12px] font-normal text-slate-500">/ Đêm Cuối Tuần (Thứ 6 - Chủ Nhật)</span>
+                        <span class="text-[12px] font-normal text-black">/ Đêm Cuối Tuần (Thứ 6 - Chủ Nhật)</span>
                     </div>`;
 
                 // Show holiday nights if any in stay
@@ -646,9 +791,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                             : `Giá Ngày Lễ ${formatDateShort(group.startDate)} :`;
                         priceHtml += `
                             <div class="flex items-baseline gap-1 whitespace-nowrap">
-                                <span class="text-[12px] font-normal text-slate-500">${dateLabel}</span>
+                                <span class="text-[12px] font-normal text-black">${dateLabel}</span>
                                 <span class="text-[15px] font-bold text-graphite leading-none">${renderCurrency(group.price)}</span>
-                                <span class="text-[12px] font-normal text-slate-500">/ 1 Đêm</span>
+                                <span class="text-[12px] font-normal text-black">/ 1 Đêm</span>
                             </div>`;
                     }
                 });
@@ -660,9 +805,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                         : `Giá ${group.isHoliday ? 'Ngày Lễ ' : 'Ngày '}${formatDateShort(group.startDate)} :`;
                     return `
                         <div class="flex items-baseline gap-1 whitespace-nowrap">
-                            <span class="text-[12px] font-normal text-slate-500">${dateLabel}</span>
+                            <span class="text-[12px] font-normal text-black">${dateLabel}</span>
                             <span class="text-[15px] font-bold text-graphite leading-none">${renderCurrency(group.price)}</span>
-                            <span class="text-[12px] font-normal text-slate-500">/ 1 Đêm</span>
+                            <span class="text-[12px] font-normal text-black">/ 1 Đêm</span>
                         </div>`;
                 }).join('');
             }
@@ -684,7 +829,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 surcharge: selectedSurcharge,
                 baseWeekday: baseWeekday,
                 baseWeekend: baseWeekend,
-                groupedNights: groupedNights.map(g => ({ ...g, startDate: formatDateShort(g.startDate), endDate: formatDateShort(g.endDate) }))
+                groupedNights: groupedNights.map(g => ({ ...g, startDate: formatDateShort(g.startDate), endDate: formatDateShort(g.endDate) })),
+                nightlyDetails: nightlyDetails.map(n => ({ ...n, date: formatDateShort(n.date) }))
             })})' 
                                 class="${isAlreadySelected ? 'bg-[#A0824B] text-white pointer-events-none' : 'bg-primary text-white'} hover:bg-[#A0824B] font-sans tracking-wider font-bold text-[15px] sm:text-[16px] py-2.5 px-8 rounded-[8px] transition-all duration-500 flex items-center justify-center leading-none uppercase w-full whitespace-nowrap">
                                 ${isAlreadySelected ? 'Đã Chọn' : 'Chọn Phòng'}
@@ -693,67 +839,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </div>`;
 
             const card = document.createElement('div');
-            card.className = "rococo-border bg-white shadow-sm overflow-hidden group scroll-animate-card";
-            card.innerHTML = `
-                <div class="acanthus-corner top-0 left-0">
-                    <svg fill="currentColor" viewbox="0 0 24 24"><path d="M2,2 L10,2 C6,2 2,6 2,10 L2,2 Z"></path></svg>
-                </div>
-                <div class="acanthus-corner top-0 right-0 rotate-90">
-                    <svg fill="currentColor" viewbox="0 0 24 24"><path d="M2,2 L10,2 C6,2 2,6 2,10 L2,2 Z"></path></svg>
-                </div>
-                <!-- Featured Image with Gallery Trigger -->
-                <div class="relative h-60 overflow-hidden border-4 border-double border-primary/60 m-2 rounded-sm cursor-pointer group/img"
-                     onclick='openGallery("${room.id}")'>
-                    <img id="img-${room.id}" alt="${room.name}" 
-                         class="w-full h-full object-cover transition-transform duration-700 group-hover/img:scale-110" 
-                         src="${roomImg}"
-                         onerror="this.style.opacity='0'"/>
-                    
-                    <!-- Subtle Media Count Badge (Bottom Corner) -->
-                    ${window.galleryData[room.id] ? `
-                        <div class="absolute bottom-3 right-3 bg-black/60 text-white text-[11px] font-display px-3 py-1.5 rounded-sm backdrop-blur-md border border-white/20 flex items-center gap-2 shadow-xl">
-                            <span class="material-symbols-outlined text-[14px]">photo_camera</span>
-                            <span>1 / ${window.galleryData[room.id].length}</span>
-                        </div>
-                    ` : ''}
-                </div>
-                <div class="px-5 pb-2.5 pt-0">
-                    <div class="flex justify-between items-start mb-0 -mt-3">
-                        <h3 class="font-display text-2xl font-bold text-graphite">${room.name}</h3>
-                    </div>
-                    <div class="flex flex-wrap gap-x-4 gap-y-0 mt-1 mb-0 text-sm text-slate-500">
-                        <div class="flex items-center gap-1">
-                            <span class="material-symbols-outlined text-xl text-primary">square_foot</span>
-                            <span>${room.area}</span>
-                        </div>
-                        ${amenitiesHtml}
-                    </div>
-                    ${specialAttrHtml}
-                    <div class="h-px bg-primary/40 w-full mt-2"></div>
-                    <div class="flex items-end justify-between pt-1">
-                        ${priceHtml}
-                    </div>
-                    <div class="flex justify-center mt-3">
-                        ${buttonHtml}
-                    </div>
-                </div>
-            `;
+            card.className = "scroll-animate-card"; 
+            card.innerHTML = buildRoomCardHTML(room, roomImg, amenitiesHtml, specialAttrHtml, priceHtml, buttonHtml);
             roomsContainer.appendChild(card);
         });
 
-        // Tích hợp Intersection Observer
-        const observerOptions = { threshold: 0.1 };
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('is-visible');
-                } else if (entry.boundingClientRect.top > 0) {
-                    entry.target.classList.remove('is-visible');
-                }
-            });
-        }, observerOptions);
-
-        document.querySelectorAll('.scroll-animate-card').forEach(card => observer.observe(card));
 
         // --- CAPACITY & NO ROOMS LOGIC ---
         const availableRoomsMessage = document.getElementById('available-rooms-message');
@@ -768,7 +858,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const STATIC_POLICY = { 1: 5, 2: 5, 3: 4, 4: 7, 5: 7, 6: 5, 7: 5, 8: 5, 9: 7, 10: 7, 11: 7, 12: 5 };
         let minDaysLead = (dynamicPolicyData && dynamicPolicyData.find(p => p.Month_ID === monthId))?.Min_Days_Lead || STATIC_POLICY[monthId] || 7;
         const isWithinPeriod = daysLead <= minDaysLead;
-
+        
         let totalAvailableOnCheckin = 0;
         if (scheduleData) {
             Object.keys(scheduleData).forEach(roomId => {
@@ -780,23 +870,131 @@ document.addEventListener('DOMContentLoaded', async () => {
         const roomsNeeded = Math.ceil(totalGuests / 3);
 
         if (availableRoomsCount === 0) {
-            if (availableRoomsMessage) availableRoomsMessage.classList.add('hidden');
-
             const isOneNightStay = datesToStay.length === 1;
             let msg = "Ngày mà bạn chọn đã hết phòng, xin vui lòng đổi ngày khác.";
-
             if (isOneNightStay && !isWithinPeriod && totalAvailableOnCheckin > 0) {
-                msg = "Chồn ưu tiên nhận đặt phòng từ 2 đêm. Với đặt phòng 1 đêm, vui lòng liên hệ Zalo.";
+                msg = "Chồn ưu tiên nhận đặt phòng từ 2 đêm trở lên. Với đặt phòng 1 đêm, vui lòng liên hệ với chúng tôi qua Zalo.";
             }
 
-            roomsContainer.innerHTML = `
-                <div id="no-rooms-alert" class="col-span-full flex flex-col items-center justify-center space-y-4 my-16 animate-shake animate-pop px-4">
-                    <span class="material-symbols-outlined text-4xl text-slate-300">event_busy</span>
-                    <p class="text-center text-[#c8a96a] font-display italic text-xl">${msg}</p>
-                </div>
-            `;
+            // Move message ABOVE the line by using the availableRoomsMessage container
+            if (availableRoomsMessage) {
+                availableRoomsMessage.classList.remove('hidden');
+                availableRoomsMessage.querySelector('p').textContent = msg;
+            }
+
+            // --- SMART SUGGESTIONS ---
+            const suggestions = findSmartSuggestions(checkinDate, checkoutDate, adults, children);
+            
+            if (suggestions.length > 0) {
+                roomsContainer.innerHTML = `
+                    <div class="col-span-full mt-4 mb-2">
+                        <p id="suggestion-header" class="text-center font-display text-primary italic text-lg animate-pop">Các phòng trống gần ngày bạn chọn nhất.</p>
+                    </div>
+                `;
+
+                suggestions.forEach(s => {
+                    const room = s.room;
+                    const isAlreadySelected = selectedRooms.some(r => String(r.id) === String(room.id));
+                    // For suggestions, we use the 'default' pricing since we aren't displaying a specific stay
+                    const roomDayData = (pricingData[room.id] && pricingData[room.id]['default']) || {};
+                    const baseWeekday = roomDayData.weekday || 800000;
+                    const baseWeekend = roomDayData.weekend || 1000000;
+                    const selectedSurcharge = roomDayData.surcharge || 450000;
+                    
+                    let roomImg = room.img;
+                    if (galleryData[room.id] && galleryData[room.id].length > 0) {
+                        roomImg = convertGDriveUrl(galleryData[room.id][0].url, false);
+                    }
+
+                    const freeDatesStr = formatFreeDates(s.freeDates);
+                    
+                    // --- Reconstruct standard UI components ---
+                    const specialAttrHtml = room.special ? `
+                        <div class="bg-primary/10 border border-primary/20 rounded p-2 mb-2">
+                            <p class="text-[11px] text-primary font-bold flex items-center gap-1 italic">
+                                <span class="material-symbols-outlined text-sm">child_care</span>
+                                ${room.special}
+                            </p>
+                        </div>
+                    ` : '';
+
+                    const amenitiesHtml = room.amenities.map(am => `
+                        <div class="flex items-center gap-1">
+                            <span class="material-symbols-outlined text-xl text-primary">done</span>
+                            <span>${am}</span>
+                        </div>
+                    `).join('');
+
+                    const surchargeText = `Phòng tiêu chuẩn 2 khách - Phụ thu khách thứ 3: ${renderCurrency(selectedSurcharge)}đ/đêm`;
+
+                    const priceHtml = `
+                        <div class="flex flex-col gap-0.5 -ml-3">
+                            <p class="text-[11px] text-black uppercase tracking-tight mb-1">Giá Niêm Yết</p>
+                            <div class="space-y-1">
+                                <div class="flex items-baseline gap-1 whitespace-nowrap">
+                                    <span class="text-[15px] font-bold text-graphite leading-none">${renderCurrency(baseWeekday)}</span>
+                                    <span class="text-[12px] font-normal text-black">/ Đêm Trong Tuần (Thứ 2 - Thứ 5)</span>
+                                </div>
+                                <div class="flex items-baseline gap-1 whitespace-nowrap">
+                                    <span class="text-[15px] font-bold text-graphite leading-none">${renderCurrency(baseWeekend)}</span>
+                                    <span class="text-[12px] font-normal text-black">/ Đêm Cuối Tuần (Thứ 6 - Chủ Nhật)</span>
+                                </div>
+                            </div>
+                            <p class="text-[12px] sm:text-[13px] text-black font-bold mt-1.5">${surchargeText}</p>
+                        </div>`;
+
+                    const buttonHtml = `
+                        <div class="relative p-[3px] rounded-xl bg-gradient-to-b from-[#BF953F] via-[#FCF6BA] to-[#AA771C] shadow-lg shadow-black/20 group/btn active:scale-95 transition-transform duration-300">
+                            <div class="p-[1px] rounded-[9px] bg-gradient-to-b from-[#AA771C] via-[#FCF6BA] to-[#BF953F]">
+                                <button data-room-id="${room.id}" onclick='selectRoom(this, ${JSON.stringify({
+                                    id: room.id,
+                                    name: room.name,
+                                    img: roomImg,
+                                    baseRoomTotal: 0, // Not available for original dates, but keeping structure
+                                    nights: datesToStay.length,
+                                    surcharge: selectedSurcharge,
+                                    baseWeekday: baseWeekday,
+                                    baseWeekend: baseWeekend,
+                                    groupedNights: [],
+                                    nightlyDetails: []
+                                })})' 
+                                    class="${isAlreadySelected ? 'bg-[#A0824B] text-white pointer-events-none' : 'bg-primary text-white'} hover:bg-[#A0824B] font-sans tracking-wider font-bold text-[15px] sm:text-[16px] py-2.5 px-8 rounded-[8px] transition-all duration-500 flex items-center justify-center leading-none uppercase w-full whitespace-nowrap">
+                                    ${isAlreadySelected ? 'Đã Chọn' : 'Chọn Phòng'}
+                                </button>
+                            </div>
+                        </div>`;
+
+                    const extraInfoHtml = `
+                        <div class="bg-red-50/50 p-2 rounded border border-red-100 mb-0">
+                             ${s.isSwitchCandidate ? `
+                                <div class="inline-flex items-center gap-1 text-[12px] font-bold text-red-600 uppercase mb-1">
+                                    <span class="material-symbols-outlined text-[13px]">swap_horiz</span>
+                                    Gợi ý phòng trống gần ngày bạn chọn nhất.
+                                </div>
+                            ` : ''}
+                            <p class="text-[13px] text-red-600 font-medium italic">
+                                Trống ngày ${freeDatesStr}
+                            </p>
+                        </div>
+                    `;
+
+                    const card = document.createElement('div');
+                    card.className = "scroll-animate-card";
+                    card.innerHTML = buildRoomCardHTML(room, roomImg, amenitiesHtml, specialAttrHtml, priceHtml, buttonHtml, extraInfoHtml);
+                    roomsContainer.appendChild(card);
+                });
+            } else {
+                roomsContainer.innerHTML = `
+                    <div id="no-rooms-alert" class="col-span-full flex flex-col items-center justify-center my-16 animate-shake animate-pop px-4">
+                        <span class="material-symbols-outlined text-4xl text-slate-300">event_busy</span>
+                    </div>
+                `;
+            }
         } else {
-            if (availableRoomsMessage) availableRoomsMessage.classList.remove('hidden');
+            if (availableRoomsMessage) {
+                availableRoomsMessage.classList.remove('hidden');
+                availableRoomsMessage.querySelector('p').textContent = "Những phòng đang hiển thị là những phòng trống vào ngày bạn chọn.";
+            }
 
             if (availableRoomsCount < roomsNeeded) {
                 // New Capacity Alert Requirement: Show rooms AND message below (Now correctly includes children)
@@ -815,6 +1013,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                 roomsContainer.appendChild(alertDiv);
             }
         }
+
+        // --- Tích hợp Intersection Observer (Move to end to catch dynamically added suggestions) ---
+        const observerOptions = { threshold: 0.1 };
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('is-visible');
+                } else if (entry.boundingClientRect.top > 0) {
+                    entry.target.classList.remove('is-visible');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.scroll-animate-card').forEach(card => observer.observe(card));
     }
 
     // Modal & Guest Logic (Move inside DOMContentLoaded to access variables)
@@ -971,115 +1183,54 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            // 1-NIGHT POLICY SYNC (Modal Edition)
+            // 1-NIGHT POLICY SYNC (Modal Edition - OPTIMIZED v11.18)
             if (diffDays === 1) {
-                try {
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    const daysLead = Math.ceil((ciDate - today) / (1000 * 60 * 60 * 24));
-                    const monthId = ciDate.getMonth() + 1;
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const daysLead = Math.ceil((ciDate - today) / (1000 * 60 * 60 * 24));
+                const monthId = ciDate.getMonth() + 1;
 
-                    // Fetch Dynamic Policy (using existing global POLICY_API)
-                    const policyResponse = await fetchJSONP(POLICY_API);
-                    let minDaysLead = 7;
-                    if (policyResponse && policyResponse.table && policyResponse.table.rows) {
-                        const colMonth = 0; const colMinDays = 1;
-                        const parsedPolicy = policyResponse.table.rows.map(row => ({
-                            Month_ID: row.c[colMonth] ? row.c[colMonth].v : null,
-                            Min_Days_Lead: row.c[colMinDays] ? row.c[colMinDays].v : null
-                        }));
-                        const mPolicy = parsedPolicy.find(p => p.Month_ID === monthId);
-                        if (mPolicy && mPolicy.Min_Days_Lead !== null) {
-                            minDaysLead = mPolicy.Min_Days_Lead;
-                        }
-                    }
+                // 1. Check Policy from memory (synced at page load)
+                const mPolicy = (dynamicPolicyData || []).find(p => p.Month_ID === monthId);
+                const minDaysLead = (mPolicy && mPolicy.Min_Days_Lead !== null) ? mPolicy.Min_Days_Lead : 7;
 
-                    if (daysLead > minDaysLead) {
-                        // Fetch Schedule
-                        const scheduleResponse = await fetchJSONP(URL_SCHEDULES[monthId - 1]);
-                        const checkoutMonthId = coDate.getMonth() + 1;
-                        const checkoutScheduleResponse = (checkoutMonthId !== monthId) ? await fetchJSONP(URL_SCHEDULES[checkoutMonthId - 1]) : scheduleResponse;
+                if (daysLead > minDaysLead) {
+                    // 2. Check Triple-Gap from memory (Booked-Available-Booked)
+                    const getStrLocal = d => {
+                        const yy = d.getFullYear(); 
+                        const mm = String(d.getMonth() + 1).padStart(2, '0'); 
+                        const dd = String(d.getDate()).padStart(2, '0');
+                        return `${yy}-${mm}-${dd}`;
+                    };
+                    
+                    const ciStr = getStrLocal(ciDate);
+                    const coStr = getStrLocal(coDate);
+                    
+                    const prDate = new Date(ciDate);
+                    prDate.setDate(prDate.getDate() - 1);
+                    const prStr = getStrLocal(prDate);
 
-                        if (scheduleResponse && scheduleResponse.table && scheduleResponse.table.rows && checkoutScheduleResponse) {
-                            const getStr = d => {
-                                const yy = d.getFullYear(); const mm = String(d.getMonth() + 1).padStart(2, '0'); const dd = String(d.getDate()).padStart(2, '0');
-                                return `${yy}-${mm}-${dd}`;
-                            };
-                            const ciStr = getStr(ciDate);
-                            const coStr = getStr(coDate);
+                    let hasAvailableRoomsOnCheckin = false;
+                    let hasValidTripleGap = false;
 
-                            const parseDateStr = (val, formatted) => {
-                                if (typeof val === 'string' && val.startsWith('Date(')) {
-                                    const parts = val.substring(5, val.length - 1).split(',');
-                                    return `${parts[0]}-${String(parseInt(parts[1]) + 1).padStart(2, '0')}-${String(parseInt(parts[2])).padStart(2, '0')}`;
-                                }
-                                let s = String(formatted || val).trim().split(' ')[0];
-                                if (s.includes('/')) {
-                                    const parts = s.split('/');
-                                    if (parts[2] && parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-                                    if (parts[0] && parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-                                } else if (s.includes('-')) {
-                                    const parts = s.split('-');
-                                    if (parts[0] && parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-                                }
-                                return s;
-                            };
+                    Object.keys(scheduleData).forEach(roomId => {
+                        const statusCi = scheduleData[roomId][ciStr];
+                        const statusCo = scheduleData[roomId][coStr];
+                        const statusPr = scheduleData[roomId][prStr];
 
-                            const ciStatuses = {};
-                            const coStatuses = {};
-
-                            const processSheet = (res, targetMap) => {
-                                res.table.rows.forEach(row => {
-                                    if (!row.c || row.c.length < 3) return;
-                                    const val = row.c[0] ? row.c[0].v : null;
-                                    const formatted = row.c[0] ? row.c[0].f : null;
-                                    const rId = row.c[1] ? row.c[1].v : null;
-                                    const status = row.c[2] ? row.c[2].v : null;
-                                    if (!val || !rId || !status) return;
-
-                                    const dateStr = parseDateStr(val, formatted);
-                                    const cleanRid = String(rId).trim().replace(/ /g, '_');
-                                    if (!targetMap[cleanRid]) targetMap[cleanRid] = {};
-                                    targetMap[cleanRid][dateStr] = String(status).trim();
-                                });
-                            };
-
-                            processSheet(scheduleResponse, ciStatuses);
-                            if (checkoutMonthId !== monthId) {
-                                processSheet(checkoutScheduleResponse, coStatuses);
-                            } else {
-                                Object.assign(coStatuses, ciStatuses);
-                            }
-
-                            let hasAvailableRoomsOnCheckin = false;
-                            let hasValidGapRoom = false;
-
-                            const isBooked = (status) => {
-                                if (!status) return false;
-                                const s = String(status).toLowerCase();
-                                if (s.includes('hủy')) return false;
-                                return s.includes('đặt') || s.includes('cọc') || s.includes('thanh toán') || s.includes('đóng') || s.includes('booked') || s === 'b';
-                            };
-
-                            Object.keys(ciStatuses).forEach(roomId => {
-                                const statusCi = ciStatuses[roomId][ciStr];
-                                let statusCo = null;
-                                if (coStatuses[roomId]) statusCo = coStatuses[roomId][coStr];
-
-                                if (!isBooked(statusCi)) {
-                                    hasAvailableRoomsOnCheckin = true;
-                                    if (isBooked(statusCo)) hasValidGapRoom = true;
-                                }
-                            });
-
-                            if (hasAvailableRoomsOnCheckin && !hasValidGapRoom) {
-                                triggerModalWarningEffect("Chồn ưu tiên nhận đặt phòng từ 2 đêm. Với đặt phòng 1 đêm, vui lòng liên hệ Zalo.");
-                                return; // BLOCK submission
+                        if (!isBooked(statusCi)) {
+                            hasAvailableRoomsOnCheckin = true;
+                            // SHOWN if BOTH before and after are booked
+                            if (isBooked(statusPr) && isBooked(statusCo)) {
+                                hasValidTripleGap = true;
                             }
                         }
+                    });
+
+                    if (hasAvailableRoomsOnCheckin && !hasValidTripleGap) {
+                        triggerModalWarningEffect("Chồn ưu tiên nhận đặt phòng từ 2 đêm. Với đặt phòng 1 đêm, vui lòng liên hệ Zalo.");
+                        return; // BLOCK submission
                     }
-                } catch (e) {
-                    console.error("Error checking gap filler on modal", e);
                 }
             }
 
@@ -1112,6 +1263,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const headerDecorTop = document.getElementById('header-decor-top');
         const headerDecorBottom = document.getElementById('header-decor-bottom');
 
+        const headerRightContainer = document.getElementById('header-right-container');
+
         window.addEventListener('scroll', () => {
             if (window.scrollY > summaryTop) {
                 headerTitleContainer?.classList.replace('left-1/2', 'left-4');
@@ -1119,8 +1272,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 headerTitle?.classList.replace('text-[28px]', 'text-[22px]');
                 headerDecorTop?.classList.remove('opacity-0');
                 headerDecorBottom?.classList.remove('opacity-0');
-                headerChangeDateBtn?.classList.replace('opacity-0', 'opacity-100');
-                headerChangeDateBtn?.classList.remove('pointer-events-none');
+                
+                // Show the full right container (button + mini summary)
+                headerRightContainer?.classList.replace('opacity-0', 'opacity-100');
+                headerRightContainer?.classList.remove('pointer-events-none');
+                headerRightContainer?.classList.replace('scale-90', 'scale-100');
+                
                 changeDateBtn?.classList.add('opacity-0', 'pointer-events-none');
             } else {
                 headerTitleContainer?.classList.replace('left-4', 'left-1/2');
@@ -1128,7 +1285,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 headerTitle?.classList.replace('text-[22px]', 'text-[28px]');
                 headerDecorTop?.classList.add('opacity-0');
                 headerDecorBottom?.classList.add('opacity-0');
-                headerChangeDateBtn?.classList.replace('opacity-100', 'opacity-0');
+                
+                // Hide right container
+                headerRightContainer?.classList.replace('opacity-100', 'opacity-0');
+                headerRightContainer?.classList.add('pointer-events-none');
+                headerRightContainer?.classList.replace('scale-100', 'scale-90');
+                
                 changeDateBtn?.classList.remove('opacity-0', 'pointer-events-none');
             }
         });

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Lịch Sử Đặt Phòng - Chồn Village</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#c8a96a",
+                        "background-light": "#fffff5",
+                        "background-dark": "#1e1b14",
+                        "graphite": "#1a1a1a",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"],
+                        "serif": ["Playfair Display", "serif"],
+                    },
+                    borderRadius: { "DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+    <style>
+        .molding-border { border: 2px solid #c8a96a; outline: 1px solid #c8a96a; outline-offset: 4px; }
+        .acanthus-corner { position: absolute; width: 40px; height: 40px; color: #c8a96a; pointer-events: none; }
+        body { min-height: 100dvh; background-color: #fffff5; }
+    </style>
+</head>
+<body class="font-display text-graphite min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="flex items-center bg-background-light dark:bg-background-dark p-4 pb-2 sticky top-0 z-50 shadow-sm border-b border-primary/10">
+        <a href="index.html" class="text-primary flex size-12 shrink-0 items-center justify-center tap-target hover:bg-primary/10 rounded-full transition-all active:scale-90 notranslate" translate="no">
+            <span class="material-symbols-outlined ml-2 notranslate" translate="no">arrow_back_ios</span>
+        </a>
+        <h1 class="font-serif italic text-xl font-bold leading-tight tracking-tight flex-1 text-center pr-12 text-primary">
+            Xác Nhận Đặt Phòng
+        </h1>
+    </header>
+
+    <main class="flex-1 p-4 flex flex-col items-center justify-center">
+        <!-- BILL RESULT (Matching Image 1) -->
+        <div id="bill-result-container" class="w-full max-w-sm bg-white rounded-xl shadow-2xl border-2 border-primary overflow-hidden flex flex-col">
+            <div class="bg-primary p-3 text-center">
+                <h3 class="font-serif text-white font-bold text-sm uppercase tracking-widest">BILL XÁC NHẬN ĐẶT PHÒNG</h3>
+            </div>
+            
+            <div class="p-5 space-y-4 max-h-[500px] overflow-y-auto font-mono text-[10px] leading-relaxed text-left border-b border-primary/10 whitespace-pre-wrap" id="bill-text-content">
+                <!-- Bill text injected here -->
+            </div>
+
+            <div class="p-3 bg-primary/5 flex flex-col gap-3">
+                <button id="send-bill-zalo-btn" class="w-full px-4 py-3 bg-primary text-white text-[11px] font-bold rounded-lg flex items-center justify-center text-center select-none active:scale-95 transition-all uppercase tracking-widest shadow-md">
+                    <span class="material-symbols-outlined text-sm mr-2" id="btn-icon">send</span>
+                    <span id="btn-text">GỬI BILL CHO CHỒN</span>
+                </button>
+                <p class="text-[11px] text-center text-primary font-medium italic leading-relaxed px-2">
+                    Xin anh chị vui lòng gửi bill cho Chồn để hoàn tất việc đặt phòng nhé (^.^)
+                </p>
+            </div>
+        </div>
+
+        <div id="no-booking" class="hidden flex flex-col items-center gap-4 text-center p-8">
+            <span class="material-symbols-outlined text-6xl text-primary/30">receipt_long</span>
+            <p class="text-sm font-medium text-primary">Bạn chưa có lịch sử đặt phòng nào gần đây.</p>
+            <a href="rooms.html" class="px-6 py-2 bg-primary text-white rounded-full font-bold text-xs uppercase tracking-widest">Đặt phòng ngay</a>
+        </div>
+    </main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="bg-background-light px-4 pb-3 pt-1 relative">
+        <!-- Decorative Top Line (Improved: Fading ends + Slightly thicker) -->
+        <div class="absolute top-0 left-0 w-full flex items-center justify-center -translate-y-1/2 pointer-events-none px-4">
+            <div class="flex-1 h-[1.5px] bg-gradient-to-r from-transparent via-[#c8aa6a]/80 to-[#c8aa6a]/80"></div>
+            <div class="mx-3">
+                <div class="w-3 h-3 border-2 border-[#c8aa6a]/80 rotate-45"></div>
+            </div>
+            <div class="flex-1 h-[1.5px] bg-gradient-to-l from-transparent via-[#c8aa6a]/80 to-[#c8aa6a]/80"></div>
+        </div>
+        <div class="flex gap-2">
+            <a class="flex flex-1 flex-col items-center justify-end gap-0.5 text-primary/60" href="index.html">
+                <span class="material-symbols-outlined text-[20px]">home</span>
+                <p class="text-[9px] font-medium leading-normal tracking-wide">Trang chủ</p>
+            </a>
+            <a class="flex flex-1 flex-col items-center justify-end gap-0.5 text-primary/60" href="rooms.html">
+                <span class="material-symbols-outlined text-[20px]">calendar_month</span>
+                <p class="text-[9px] font-medium leading-normal tracking-wide">Đặt phòng</p>
+            </a>
+            <a class="flex flex-1 flex-col items-center justify-end gap-0.5 text-primary/60" href="#">
+                <span class="material-symbols-outlined text-[20px]">notifications</span>
+                <p class="text-[9px] font-medium leading-normal tracking-wide">Thông báo</p>
+            </a>
+            <a class="flex flex-1 flex-col items-center justify-end gap-0.5 text-primary" href="#">
+                <span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1">person</span>
+                <p class="text-[9px] font-medium leading-normal tracking-wide">Cá nhân</p>
+            </a>
+        </div>
+    </nav>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const data = sessionStorage.getItem('chonVillageLastBooking');
+            const billEl = document.getElementById('bill-text-content');
+            const container = document.getElementById('bill-result-container');
+            const noBooking = document.getElementById('no-booking');
+            const sendBtn = document.getElementById('send-bill-zalo-btn');
+            const btnText = document.getElementById('btn-text');
+            const btnIcon = document.getElementById('btn-icon');
+
+            if (!data) {
+                container.classList.add('hidden');
+                noBooking.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const { billText } = JSON.parse(data);
+                billEl.textContent = billText;
+
+                sendBtn.addEventListener('click', () => {
+                    const triggerSuccess = () => {
+                        const oldText = btnText.textContent;
+                        const oldIcon = btnIcon.textContent;
+                        btnText.textContent = "BẢN GỐC ĐÃ CHÉP & ĐANG MỞ ZALO...";
+                        btnIcon.textContent = "check";
+                        setTimeout(() => {
+                            btnText.textContent = oldText;
+                            btnIcon.textContent = oldIcon;
+                        }, 3000);
+                    };
+
+                    const handleCopy = () => {
+                        if (navigator.clipboard && window.isSecureContext) {
+                            navigator.clipboard.writeText(billText).then(() => {
+                                triggerSuccess();
+                                window.open("https://zalo.me/0889717713", "_blank");
+                            });
+                        } else {
+                            const textArea = document.createElement("textarea");
+                            textArea.value = billText;
+                            textArea.style.position = "fixed";
+                            textArea.style.left = "-9999px";
+                            document.body.appendChild(textArea);
+                            textArea.focus();
+                            textArea.select();
+                            try {
+                                document.execCommand('copy');
+                                triggerSuccess();
+                                window.open("https://zalo.me/0889717713", "_blank");
+                            } catch (err) {
+                                alert("Vui lòng copy thủ công bill này.");
+                            }
+                            document.body.removeChild(textArea);
+                        }
+                    };
+                    handleCopy();
+                });
+
+            } catch (e) {
+                console.error(e);
+                container.classList.add('hidden');
+                noBooking.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
