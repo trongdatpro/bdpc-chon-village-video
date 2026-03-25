@@ -1035,11 +1035,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         // We will update .min dynamically in renderRoomMonthCalendar based on room occupancy
 
         const syncFromInput = (input) => {
-            if (input.value) {
-                // If the user manually changes the date via the native picker,
-                // we treat it as a fresh calendar click.
-                if (window.handleCalendarDateClick) {
-                    window.handleCalendarDateClick(input.value);
+            if (input.value && !window._isSyncingFromNative) {
+                try {
+                    window._isSyncingFromNative = true;
+                    if (window.handleCalendarDateClick) {
+                        window.handleCalendarDateClick(input.value);
+                    }
+                } finally {
+                    window._isSyncingFromNative = false;
                 }
             }
         };
@@ -1074,7 +1077,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    const openModal = (isPopState = false) => {
+    const openModal = (isPopState = false, preferredRoomId = null) => {
         window._calendarFirstClick = true;
         if (!isPopState) {
             history.pushState({ view: 'booking-modal' }, '');
@@ -1105,13 +1108,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             modal.classList.remove('opacity-0');
             if (modalContent) modalContent.classList.remove('translate-y-full');
         }
+
+        // --- CALENDAR ALWAYS VISIBLE ---
+        // Priority: preferredRoomId > first selected room > null (global)
+        const targetRoomId = preferredRoomId || (selectedRooms.length > 0 ? selectedRooms[0].id : null);
+        const startMonth = checkinDate ? checkinDate.getMonth() : new Date().getMonth();
+        const startYear = checkinDate ? checkinDate.getFullYear() : new Date().getFullYear();
+        renderRoomMonthCalendar(targetRoomId, startMonth, startYear);
     };
     window.openModal = openModal;
 
     window.openSuggestionModal = (roomId) => {
-        const today = new Date();
-        renderRoomMonthCalendar(roomId, today.getMonth(), today.getFullYear());
-        openModal();
+        openModal(false, roomId);
     };
 
     function renderRoomMonthCalendar(roomId, month, year) {
@@ -1125,18 +1133,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Update native input MIN date based on room occupancy
         const ciInput = document.getElementById('modal-checkin');
         const coInput = document.getElementById('modal-checkout');
-        if (ciInput && scheduleData[roomId]) {
-            let firstFree = new Date(today);
-            while (true) {
-                const ffStr = getStr(firstFree);
-                const isRoomBooked = isBooked(scheduleData[roomId][ffStr]);
-                if (!isRoomBooked) break;
-                firstFree.setDate(firstFree.getDate() + 1);
-                // Safety break 1 month
-                if (firstFree.getTime() > today.getTime() + 30 * 86400000) break;
-            }
-            ciInput.min = getStr(firstFree);
-        }
+        
+        // If ciInput exists, set its min to today at least
+        if (ciInput) ciInput.min = getStr(today);
 
         // Month calculations (Local)
         const firstDay = new Date(year, month, 1);
@@ -1148,13 +1147,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         let firstDayIdx = firstDay.getDay();
         let padding = firstDayIdx === 0 ? 6 : firstDayIdx - 1;
 
-        // Current selection from inputs
-        const ciDate = ciInput && ciInput.value ? parseLocal(ciInput.value) : null;
-        const coDate = coInput && coInput.value ? parseLocal(coInput.value) : null;
-
-        const monthNames = ["Một", "Hai", "Ba", "Bốn", "Năm", "Sáu", "Bảy", "Tám", "Chín", "Mười", "Mười Một", "Mười Hai"];
-        const dayHeaders = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-
         // Navigation
         window.changeCalendarMonth = (offset) => {
             let newMonth = month + offset;
@@ -1164,113 +1156,107 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderRoomMonthCalendar(roomId, newMonth, newYear);
         };
 
-        if (typeof window._calendarFirstClick === 'undefined') window._calendarFirstClick = true;
+        if (!window.handleCalendarDateClick) {
+            window.handleCalendarDateClick = (dateStr, rId, m, y) => {
+                const checkin = document.getElementById('modal-checkin');
+                const checkout = document.getElementById('modal-checkout');
+                if (!checkin || !checkout) return;
 
-        window.handleCalendarDateClick = (dateStr) => {
-            const checkin = document.getElementById('modal-checkin');
-            const checkout = document.getElementById('modal-checkout');
-            if (!checkin || !checkout) return;
+                const d = new Date(dateStr);
+                d.setHours(0, 0, 0, 0);
+                const today = new Date(); today.setHours(0, 0, 0, 0);
+                if (d < today) return;
 
-            const d = new Date(dateStr);
-            d.setHours(0, 0, 0, 0);
+                const currentCI = checkin.value;
+                const currentCO = checkout.value;
 
-            if (d < today) return;
-
-            const isBookedClick = isBooked(scheduleData[roomId] ? scheduleData[roomId][dateStr] : null);
-
-            // --- TOGGLE OFF ---
-            if (checkin.value === dateStr) {
-                checkin.value = "";
-                checkout.value = "";
-                window._calendarFirstClick = true;
-            }
-            // If starting a NEW stay (First click, or no CI, or earlier CI)
-            else if (window._calendarFirstClick || !checkin.value || dateStr < checkin.value) {
-                if (isBookedClick) return; // Cannot start a stay on a booked night
-
-                checkin.value = dateStr;
-                const nextD = new Date(d);
-                nextD.setDate(nextD.getDate() + 1);
-                checkout.value = getStr(nextD);
-                window._calendarFirstClick = false;
-            } else {
-                // EXTEND: Always CO = Last Night Clicked + 1
-                const nextD = new Date(d);
-                nextD.setDate(nextD.getDate() + 1);
-                checkout.value = getStr(nextD);
-            }
-
-            // --- NUCLEAR SYNC ---
-            // Force Checkout to stay exactly 1 day after the clicked date if extending
-            if (!window._calendarFirstClick && dateStr >= checkin.value) {
-                const nextD = new Date(d);
-                nextD.setDate(nextD.getDate() + 1);
-                checkout.value = getStr(nextD);
-            }
-
-            // Sync Main Labels
-            if (window.updateBookingSummaryLabels) {
-                window.updateBookingSummaryLabels(checkin.value, checkout.value);
-            }
-
-            // Trigger events for other scripts
-            // We use a flag to prevent infinite loops from the listeners we are about to add
-            if (!window._isSyncingFromNative) {
-                checkin.dispatchEvent(new Event('input', { bubbles: true }));
-                checkin.dispatchEvent(new Event('change', { bubbles: true }));
-                checkout.dispatchEvent(new Event('input', { bubbles: true }));
-                checkout.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-
-            renderRoomMonthCalendar(roomId, month, year);
-        };
-
-        // NUCLEAR SYNC: Re-bind listeners for native input changes
-        if (ciInput && coInput && !ciInput._hasSyncListener) {
-            const syncFromNative = (e) => {
-                if (window._isSyncingFromNative) return;
-                try {
-                    window._isSyncingFromNative = true;
-                    window.handleCalendarDateClick(e.target.value);
-                } finally {
-                    window._isSyncingFromNative = false;
+                if (currentCI === dateStr) {
+                    checkin.value = "";
+                    checkout.value = "";
+                } else if (!currentCI || dateStr < currentCI || (currentCI && currentCO)) {
+                    let isNBooked = false;
+                    if (rId) isNBooked = isBooked(scheduleData[rId] ? scheduleData[rId][dateStr] : null);
+                    else {
+                        let anyF = false;
+                        for (let rid of localRooms.map(r => r.id)) {
+                            if (!isBooked(scheduleData[rid] ? scheduleData[rid][dateStr] : null)) { anyF = true; break; }
+                        }
+                        isNBooked = !anyF;
+                    }
+                    if (isNBooked) return;
+                    checkin.value = dateStr;
+                    checkout.value = "";
+                } else {
+                    let tempCI = new Date(currentCI);
+                    let tempCO = new Date(dateStr);
+                    let canSelect = true;
+                    if (rId) {
+                        let scan = new Date(tempCI);
+                        while (scan < tempCO) {
+                            if (isBooked(scheduleData[rId] ? scheduleData[rId][getStr(scan)] : null)) {
+                                canSelect = false; break;
+                            }
+                            scan.setDate(scan.getDate() + 1);
+                        }
+                    }
+                    if (canSelect) checkout.value = dateStr;
+                    else { checkin.value = dateStr; checkout.value = ""; }
                 }
+
+                if (window.updateBookingSummaryLabels) {
+                    window.updateBookingSummaryLabels(checkin.value, checkout.value);
+                }
+
+                if (!window._isSyncingFromNative) {
+                    try {
+                        window._isSyncingFromNative = true;
+                        checkin.dispatchEvent(new Event('input', { bubbles: true }));
+                        checkin.dispatchEvent(new Event('change', { bubbles: true }));
+                        checkout.dispatchEvent(new Event('input', { bubbles: true }));
+                        checkout.dispatchEvent(new Event('change', { bubbles: true }));
+                    } finally {
+                        window._isSyncingFromNative = false;
+                    }
+                }
+                renderRoomMonthCalendar(rId, m, y);
             };
-            ciInput.addEventListener('change', syncFromNative);
-            coInput.addEventListener('change', syncFromNative);
-            ciInput._hasSyncListener = true;
         }
 
-        const renderDay = (d, isCurrentMonth) => {
+        const renderDay = (d) => {
             const dStr = getStr(d);
             const isToday = d.getTime() === today.getTime();
             const isPast = d < today;
 
-            let isBookedDay;
-            if (isPast && !isToday) {
-                const seed = d.getMonth() + d.getFullYear() + (roomId ? roomId.charCodeAt(0) : 0);
-                const empty1 = (seed % 7) + 2; const empty2 = (seed % 7) + 12; const empty3 = (seed % 7) + 22;
-                isBookedDay = ![empty1, empty2, empty3].includes(d.getDate());
-            } else {
+            let isBookedDay = false;
+            if (roomId) {
                 isBookedDay = isBooked(scheduleData[roomId] ? scheduleData[roomId][dStr] : null);
+            } else {
+                // Global view: "Trống" if ANY room is free
+                let anyFree = false;
+                for (let rId of localRooms.map(r => r.id)) {
+                    if (!isBooked(scheduleData[rId] ? scheduleData[rId][dStr] : null)) {
+                        anyFree = true; break;
+                    }
+                }
+                isBookedDay = !anyFree;
             }
 
-            // HIGHLIGHT: CI through (CO - 1)
             const ciVal = ciInput.value;
             const coVal = coInput.value;
             const ciTime = ciVal ? parseLocal(ciVal).getTime() : null;
-            const lastStayTime = coVal ? (parseLocal(coVal).getTime() - 86400000) : null;
+            const coTime = coVal ? parseLocal(coVal).getTime() : null;
 
-            let isSelected = (ciTime && d.getTime() === ciTime) || (lastStayTime && d.getTime() === lastStayTime);
-            let isInRange = ciTime && lastStayTime && d.getTime() > ciTime && d.getTime() < lastStayTime;
+            let isCI = ciTime && d.getTime() === ciTime;
+            let isCO = coTime && d.getTime() === coTime;
+            let isInRange = ciTime && coTime && d.getTime() > ciTime && d.getTime() < coTime;
 
-            let style = 'bg-white text-graphite border border-gray-50';
+            let style = 'bg-white text-graphite border border-gray-100';
             let cursor = 'cursor-pointer hover:bg-gray-50';
 
             if (isBookedDay) {
-                style = 'bg-[#c8a96a] text-white font-bold opacity-90';
+                style = 'bg-[#c8a96a] text-white font-bold opacity-90'; // matches user screenshot
                 cursor = 'cursor-not-allowed';
-            } else if (isSelected) {
+            } else if (isCI || isCO) {
                 style = 'bg-[#3b82f6] text-white font-bold z-10 shadow-md';
             } else if (isInRange) {
                 style = 'bg-[#3b82f6]/10 text-[#3b82f6] font-medium';
@@ -1279,63 +1265,65 @@ document.addEventListener('DOMContentLoaded', async () => {
                 cursor = 'cursor-not-allowed';
             }
 
-            if (isToday && !isSelected && !isBookedDay) style += ' ring-1 ring-[#c8a96a] ring-inset';
+            if (isToday && !isCI && !isCO && !isBookedDay) style += ' ring-1 ring-[#c8a96a] ring-inset';
 
-            const isCurrentM = d.getMonth() === month;
-            const dayText = `<span class="${isCurrentM ? 'opacity-100' : 'opacity-60'}">${d.getDate()}/${d.getMonth() + 1}</span>`;
+            const dInMonth = d.getMonth() === month;
+            const dayText = `<span class="${dInMonth ? 'opacity-100' : 'opacity-40'}">${d.getDate()}/${d.getMonth() + 1}</span>`;
 
             return `
-                <div onclick="handleCalendarDateClick('${dStr}')" 
-                     class="${style} ${cursor} h-9 rounded-md flex items-center justify-center text-[11px] relative transition-all duration-200">
+                <div onclick="handleCalendarDateClick('${dStr}', '${roomId || ''}', ${month}, ${year})" 
+                     class="${style} ${cursor} h-8 rounded-lg flex items-center justify-center text-[12px] relative transition-all duration-200 shadow-sm">
                     ${dayText}
-                    ${isToday && !isBookedDay ? '<div class="absolute bottom-1 w-1 h-1 bg-[#c8a96a] rounded-full"></div>' : ''}
-                    ${isPast && !isToday ? '<div class="absolute inset-0 bg-white/40 pointer-events-none rounded-md"></div>' : ''}
+                    ${isToday && !isBookedDay && !isCI && !isCO ? '<div class="absolute bottom-1 w-1 h-1 bg-[#c8a96a] rounded-full"></div>' : ''}
                 </div>
             `;
         };
 
         const gridDays = [];
         for (let i = padding - 1; i >= 0; i--) {
-            gridDays.push({ date: new Date(year, month, -i), current: false });
+            gridDays.push(new Date(year, month, -i));
         }
         for (let i = 1; i <= numDays; i++) {
-            gridDays.push({ date: new Date(year, month, i), current: true });
+            gridDays.push(new Date(year, month, i));
         }
         const remaining = 42 - gridDays.length;
         for (let i = 1; i <= remaining; i++) {
-            gridDays.push({ date: new Date(year, month + 1, i), current: false });
+            gridDays.push(new Date(year, month + 1, i));
         }
 
+        const monthNames = ["Một", "Hai", "Ba", "Bốn", "Năm", "Sáu", "Bảy", "Tám", "Chín", "Mười", "Mười Một", "Mười Hai"];
+        const dayHeaders = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+
         let html = `
-            <div class="bg-white p-3 rounded-lg border border-[#c8a96a]/30 shadow-lg w-full font-sans select-none">
-                <div class="flex items-center justify-between mb-2 border-b border-[#c8a96a]/10 pb-2">
-                    <h4 class="text-base font-bold text-graphite font-display tracking-tight">Tháng ${monthNames[month]} ${year}</h4>
+            <div class="bg-white p-2 rounded-2xl border border-[#c8a96a]/30 shadow-xl w-full font-sans select-none animate-[fadeIn_0.5s_ease-out]">
+                <div class="flex items-center justify-between mb-1 border-b border-[#c8a96a]/10 pb-1">
+                    <h4 class="text-lg font-bold text-graphite font-display tracking-tight">Tháng ${monthNames[month]} ${year}</h4>
                     <div class="flex gap-2">
-                        <button onclick="changeCalendarMonth(-1)" class="p-1 px-2 hover:bg-gray-100 rounded-lg transition-colors border border-gray-100">
+                        <button onclick="changeCalendarMonth(-1)" class="p-1 px-3 hover:bg-gray-100 rounded-full transition-colors border border-gray-100 flex items-center shadow-sm">
                             <span class="material-symbols-outlined text-xl leading-none cursor-pointer">keyboard_arrow_left</span>
                         </button>
-                        <button onclick="changeCalendarMonth(1)" class="p-1 px-2 hover:bg-gray-100 rounded-lg transition-colors border border-gray-100">
+                        <button onclick="changeCalendarMonth(1)" class="p-1 px-3 hover:bg-gray-100 rounded-full transition-colors border border-gray-100 flex items-center shadow-sm">
                             <span class="material-symbols-outlined text-xl leading-none cursor-pointer">keyboard_arrow_right</span>
                         </button>
                     </div>
                 </div>
-                <div class="grid grid-cols-7 gap-1">
-                    ${dayHeaders.map(h => `<div class="text-[11px] text-[#c8a96a] text-center font-bold pb-1 uppercase tracking-widest">${h}</div>`).join('')}
+                <div class="grid grid-cols-7 gap-1 mb-1">
+                    ${dayHeaders.map(h => `<div class="text-[12px] text-[#c8a96a] text-center font-bold uppercase tracking-widest">${h}</div>`).join('')}
                 </div>
                 <div class="grid grid-cols-7 gap-1">
-                    ${gridDays.map(gd => renderDay(gd.date, gd.current)).join('')}
+                    ${gridDays.map(d => renderDay(d)).join('')}
                 </div>
-                <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-100">
-                    <button onclick="renderRoomMonthCalendar('${roomId}', ${today.getMonth()}, ${today.getFullYear()})" 
-                            class="text-[10px] text-[#c8a96a] font-bold uppercase tracking-widest hover:bg-gray-50 px-2 py-1 rounded transition-colors cursor-pointer">Hôm nay</button>
-                    <div class="flex items-center gap-4">
-                         <div class="flex items-center gap-1.5">
-                            <div class="w-3 h-3 bg-[#c8a96a] rounded-sm shadow-sm"></div>
-                            <span class="text-[9px] text-gray-500 uppercase font-bold">Hết phòng</span>
+                <div class="flex justify-between items-center mt-2 pt-1 border-t border-gray-100">
+                    <button onclick="renderRoomMonthCalendar('${roomId || ''}', ${today.getMonth()}, ${today.getFullYear()})" 
+                            class="text-[11px] text-[#c8a96a] font-bold uppercase tracking-widest hover:bg-primary/5 px-4 py-1.5 rounded-full border border-primary/20 transition-all cursor-pointer">Hôm nay</button>
+                    <div class="flex items-center gap-3">
+                         <div class="flex items-center gap-1">
+                            <div class="w-3 h-3 bg-[#c8a96a] rounded shadow-sm"></div>
+                            <span class="text-[9px] text-gray-500 uppercase font-bold tracking-tighter">Hết</span>
                          </div>
-                         <div class="flex items-center gap-1.5">
-                            <div class="w-3 h-3 bg-white border border-gray-200 rounded-sm shadow-sm"></div>
-                            <span class="text-[9px] text-gray-500 uppercase font-bold">Trống</span>
+                         <div class="flex items-center gap-1">
+                            <div class="w-3 h-3 bg-white border border-gray-200 rounded shadow-sm"></div>
+                            <span class="text-[9px] text-gray-500 uppercase font-bold tracking-tighter">Trống</span>
                          </div>
                     </div>
                 </div>
