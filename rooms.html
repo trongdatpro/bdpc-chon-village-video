@@ -178,6 +178,29 @@
             animation: reviewPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
             opacity: 0;
         }
+
+        /* Diamond Divider */
+        .diamond-divider {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            margin: 0px 0 4px 0; /* Tight spacing as requested */
+        }
+        .diamond-line {
+            flex-grow: 1;
+            height: 1px;
+            background: linear-gradient(to right, transparent, #c8aa6a, transparent);
+            opacity: 0.4;
+        }
+        .diamond-square {
+            width: 6px;
+            height: 6px;
+            border: 1px solid #c8aa6a;
+            transform: rotate(45deg);
+            margin: 0 10px;
+            flex-shrink: 0;
+            opacity: 0.7;
+        }
     </style>
     <style>
         body {
@@ -427,8 +450,8 @@
                                 <div
                                     class="border border-[#c8a96a]/30 p-1 flex justify-between items-center bg-transparent h-8">
                                     <input id="modal-checkin"
-                                        class="bg-transparent border-none focus:ring-0 text-graphite text-sm p-0 rounded-none outline-none w-full"
-                                        type="date" />
+                                        class="bg-transparent border-none focus:ring-0 text-graphite text-sm p-0 rounded-none outline-none w-full cursor-default"
+                                        type="text" readonly placeholder="dd/mm/yyyy" />
                                 </div>
                             </div>
                             <div class="flex flex-col">
@@ -437,14 +460,60 @@
                                 <div
                                     class="border border-[#c8a96a]/30 p-1 flex justify-between items-center bg-transparent h-8">
                                     <input id="modal-checkout"
-                                        class="bg-transparent border-none focus:ring-0 text-graphite text-sm p-0 rounded-none outline-none w-full"
-                                        type="date" />
+                                        class="bg-transparent border-none focus:ring-0 text-graphite text-sm p-0 rounded-none outline-none w-full cursor-default"
+                                        type="text" readonly placeholder="dd/mm/yyyy" />
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Guests Section -->
+                        <!-- Content Section: Room Info (Top) -> Divider -> Guests (Bottom) -->
                         <div class="space-y-1 pt-1">
+                            <!-- Decorative Divider -->
+                            <div class="diamond-divider">
+                                <div class="diamond-line"></div>
+                                <div class="diamond-square"></div>
+                                <div class="diamond-line"></div>
+                            </div>
+
+                            <!-- Room Info & Dynamic Pricing Section -->
+                            <div id="modal-room-details" class="hidden flex flex-row items-start gap-4 py-1 opacity-0 transition-opacity duration-300 w-full overflow-hidden">
+                                <!-- Left: Room Identity -->
+                                <div class="flex flex-col items-start shrink-0">
+                                    <h4 id="modal-room-name" class="text-[10px] font-serif text-graphite uppercase tracking-[0.2em] mb-1 font-bold"></h4>
+                                    <div class="w-[110px] p-0.5 border border-[#c8a96a]/30 rounded-sm bg-white shadow-sm hover:border-[#c8a96a] transition-all duration-300 active:scale-95 cursor-pointer" 
+                                         onclick="if(window.openGallery && window._currentModalRoomId) window.openGallery(window._currentModalRoomId)">
+                                        <img id="modal-room-image" src="" alt="" class="w-full aspect-square object-cover rounded-[1px]" />
+                                    </div>
+                                </div>
+                                
+                                <!-- Right: Price Breakdown -->
+                                <div id="modal-price-breakdown" class="flex-1 text-[11px] font-sans text-graphite pt-0.5 overflow-hidden hidden">
+                                    <div class="font-sans font-bold text-[11px] text-[#c8a96a] mb-1.5 border-b border-[#c8a96a]/20 pb-0.5">Chi Tiết Giá</div>
+                                    <div id="modal-price-list" class="space-y-1 mb-2 max-h-[70px] overflow-y-auto pr-1 text-[10px] scrollbar-hide">
+                                        <!-- Nightly rates: 26/03: 1.200.000đ -->
+                                    </div>
+                                    <div id="modal-total-section" class="mt-1 pt-1 border-t border-[#c8a96a]/40">
+                                        <div id="modal-surcharge-row" class="flex justify-between text-[9px] text-primary italic mb-0.5 hidden">
+                                            <span>Phụ thu thêm người:</span>
+                                            <span id="modal-surcharge-price">0đ</span>
+                                        </div>
+                                        <div class="flex justify-between items-center font-bold text-[12px] text-graphite">
+                                            <span class="font-serif text-[10px] uppercase tracking-tighter">TỔNG CỘNG:</span>
+                                            <span id="modal-total-price" class="text-primary">0đ</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Decorative Divider (Stays in Middle) -->
+                            <div class="diamond-divider">
+                                <div class="diamond-line"></div>
+                                <div class="diamond-square"></div>
+                                <div class="diamond-line"></div>
+                            </div>
+
+                            <!-- Guests Section (Now at Bottom) -->
+                            <!-- Người Lớn Row -->
                             <div class="flex items-center justify-between border-b border-[#c8a96a]/10 pb-2">
                                 <span class="text-[10px] font-serif text-graphite uppercase tracking-widest">Người Lớn</span>
                                 <div class="flex items-center gap-2">
@@ -457,7 +526,9 @@
                                         type="button">+</button>
                                 </div>
                             </div>
-                            <div class="flex items-center justify-between border-b border-[#c8a96a]/10 pb-2">
+
+                            <!-- Trẻ Em Row -->
+                            <div class="flex items-center justify-between border-b border-[#c8a96a]/10 pb-1">
                                 <div class="flex flex-col">
                                     <span class="text-[10px] font-display text-graphite uppercase">Trẻ Em</span>
                                     <div id="modal-children-ages-container" class="flex flex-wrap gap-1 mt-0.5">
@@ -546,11 +617,13 @@
             </div>
         </div>
         <style>
-            .no-scrollbar::-webkit-scrollbar {
+            .no-scrollbar::-webkit-scrollbar,
+            .scrollbar-hide::-webkit-scrollbar {
                 display: none;
             }
 
-            .no-scrollbar {
+            .no-scrollbar,
+            .scrollbar-hide {
                 -ms-overflow-style: none;
                 scrollbar-width: none;
             }

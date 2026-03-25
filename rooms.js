@@ -1031,24 +1031,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     let childCountLocal = children || 0;
 
     const todayVal = new Date().toISOString().split('T')[0];
+    const formatDisplayDate = (dStr) => {
+        if (!dStr) return "";
+        const [y, m, d] = dStr.split('-');
+        return `${d}/${m}/${y}`;
+    };
+
     if (checkinInput && checkoutInput) {
-        // We will update .min dynamically in renderRoomMonthCalendar based on room occupancy
-
-        const syncFromInput = (input) => {
-            if (input.value && !window._isSyncingFromNative) {
-                try {
-                    window._isSyncingFromNative = true;
-                    if (window.handleCalendarDateClick) {
-                        window.handleCalendarDateClick(input.value);
-                    }
-                } finally {
-                    window._isSyncingFromNative = false;
-                }
-            }
-        };
-
-        checkinInput.addEventListener('change', () => syncFromInput(checkinInput));
-        checkoutInput.addEventListener('change', () => syncFromInput(checkoutInput));
+        // Native picker disabled, min not needed for type="text"
     }
 
     const modalAgeContainer = document.getElementById('modal-children-ages-container');
@@ -1083,8 +1073,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             history.pushState({ view: 'booking-modal' }, '');
         }
 
-        if (checkinInput) checkinInput.value = "";
-        if (checkoutInput) checkoutInput.value = "";
+        if (checkinInput) { checkinInput.value = ""; checkinInput.removeAttribute('data-date'); }
+        if (checkoutInput) { checkoutInput.value = ""; checkoutInput.removeAttribute('data-date'); }
         adultCountLocal = parseInt(bookingData.adults) || 2;
         childCountLocal = parseInt(bookingData.children) || 0;
 
@@ -1109,9 +1099,42 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (modalContent) modalContent.classList.remove('translate-y-full');
         }
 
-        // --- CALENDAR ALWAYS VISIBLE ---
-        // Priority: preferredRoomId > first selected room > null (global)
+        // --- CALENDAR & ROOM INFO ---
         const targetRoomId = preferredRoomId || (selectedRooms.length > 0 ? selectedRooms[0].id : null);
+        window._currentModalRoomId = targetRoomId; // Track for pricing updates
+
+        const roomDetailsContainer = document.getElementById('modal-room-details');
+        const roomNameEl = document.getElementById('modal-room-name');
+        const roomImgEl = document.getElementById('modal-room-image');
+
+        if (targetRoomId && roomDetailsContainer && roomNameEl && roomImgEl) {
+            const roomObj = localRooms.find(r => r.id === targetRoomId);
+            if (roomObj) {
+                roomNameEl.textContent = roomObj.name;
+                
+                // --- ROBUST IMAGE LOOKUP ---
+                // Try: 1. galleryData[id], 2. galleryData[Pink_Room], 3. roomObj.img
+                let rKey = targetRoomId;
+                let roomImg = roomObj.img;
+                if (window.galleryData[rKey] && window.galleryData[rKey].length > 0) {
+                    roomImg = window.galleryData[rKey][0].url;
+                }
+                roomImgEl.src = convertGDriveUrl(roomImg);
+                
+                roomDetailsContainer.classList.remove('hidden');
+                setTimeout(() => roomDetailsContainer.classList.add('opacity-100'), 50);
+                
+                // Trigger initial price calculation
+                if (window.updateModalPricing) window.updateModalPricing(targetRoomId);
+            } else {
+                roomDetailsContainer.classList.add('hidden');
+                roomDetailsContainer.classList.remove('opacity-100');
+            }
+        } else if (roomDetailsContainer) {
+            roomDetailsContainer.classList.add('hidden');
+            roomDetailsContainer.classList.remove('opacity-100');
+        }
+
         const startMonth = checkinDate ? checkinDate.getMonth() : new Date().getMonth();
         const startYear = checkinDate ? checkinDate.getFullYear() : new Date().getFullYear();
         renderRoomMonthCalendar(targetRoomId, startMonth, startYear);
@@ -1130,12 +1153,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        // Update native input MIN date based on room occupancy
+        // Get check-in/out inputs for dataset values (native picker disabled)
         const ciInput = document.getElementById('modal-checkin');
         const coInput = document.getElementById('modal-checkout');
         
-        // If ciInput exists, set its min to today at least
-        if (ciInput) ciInput.min = getStr(today);
+        // Native picker disabled, min not needed for type="text" readonly
+        // if (ciInput) ciInput.min = getStr(today);
 
         // Month calculations (Local)
         const firstDay = new Date(year, month, 1);
@@ -1167,8 +1190,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const today = new Date(); today.setHours(0, 0, 0, 0);
                 if (d < today) return;
 
-                const currentCI = checkin.value;
-                const currentCO = checkout.value;
+                const currentCI = checkin.dataset.date || "";
+                const currentCO = checkout.dataset.date || "";
 
                 // Helper for interaction: Get stay night boundaries
                 const getNextDayStr = (dStr) => {
@@ -1186,8 +1209,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (currentCI === dateStr || lastStayNight === dateStr) {
                     // Reset if clicking either boundary
-                    checkin.value = "";
-                    checkout.value = "";
+                    checkin.value = ""; checkin.removeAttribute('data-date');
+                    checkout.value = ""; checkout.removeAttribute('data-date');
                 } else if (!currentCI || dateStr < currentCI || isRange) {
                     // Start fresh if: nothing selected, clicking earlier, OR a range is already set
                     let isNBooked = false;
@@ -1201,8 +1224,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                     if (isNBooked) return;
 
-                    checkin.value = dateStr;
-                    checkout.value = getNextDayStr(dateStr);
+                    checkin.value = formatDisplayDate(dateStr);
+                    checkin.setAttribute('data-date', dateStr);
+                    checkout.value = formatDisplayDate(getNextDayStr(dateStr));
+                    checkout.setAttribute('data-date', getNextDayStr(dateStr));
                 } else {
                     // Extension: Clicked date > CI and it's currently only 1 night
                     let tempCI = new Date(currentCI);
@@ -1220,15 +1245,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                     
                     if (canSelect) {
-                        checkout.value = getNextDayStr(dateStr);
+                        checkout.value = formatDisplayDate(getNextDayStr(dateStr));
+                        checkout.setAttribute('data-date', getNextDayStr(dateStr));
                     } else {
-                        checkin.value = dateStr;
-                        checkout.value = getNextDayStr(dateStr);
+                        checkin.value = formatDisplayDate(dateStr);
+                        checkin.setAttribute('data-date', dateStr);
+                        checkout.value = formatDisplayDate(getNextDayStr(dateStr));
+                        checkout.setAttribute('data-date', getNextDayStr(dateStr));
                     }
                 }
 
                 if (window.updateBookingSummaryLabels) {
-                    window.updateBookingSummaryLabels(checkin.value, checkout.value);
+                    window.updateBookingSummaryLabels(checkin.dataset.date || "", checkout.dataset.date || "");
                 }
 
                 if (!window._isSyncingFromNative) {
@@ -1242,9 +1270,82 @@ document.addEventListener('DOMContentLoaded', async () => {
                         window._isSyncingFromNative = false;
                     }
                 }
+                if (window.updateModalPricing) {
+                    window.updateModalPricing(rId);
+                }
                 renderRoomMonthCalendar(rId, m, y);
             };
         }
+
+        window.updateModalPricing = (rId) => {
+            const container = document.getElementById('modal-price-breakdown');
+            const list = document.getElementById('modal-price-list');
+            const totalEl = document.getElementById('modal-total-price');
+            const surchargeRow = document.getElementById('modal-surcharge-row');
+            const surchargeEl = document.getElementById('modal-surcharge-price');
+            const ci = document.getElementById('modal-checkin')?.dataset.date;
+            const co = document.getElementById('modal-checkout')?.dataset.date;
+
+            if (!rId || !ci || !co || !container || !list || !totalEl) {
+                if (container) container.classList.add('hidden');
+                return;
+            }
+
+            const ciDate = parseLocal(ci);
+            const coDate = parseLocal(co);
+            if (coDate <= ciDate) {
+                container.classList.add('hidden');
+                return;
+            }
+
+            const stayDates = [];
+            let curr = new Date(ciDate);
+            while (curr < coDate) {
+                stayDates.push(new Date(curr));
+                curr.setDate(curr.getDate() + 1);
+            }
+
+            let totalBase = 0;
+            let listHtml = "";
+            let avgSurcharge = 0;
+
+            stayDates.forEach(d => {
+                const dStr = getStr(d);
+                const roomDayData = (pricingData[rId] && pricingData[rId][dStr]) || (pricingData[rId] && pricingData[rId]['default']) || {};
+                const dow = d.getDay();
+                const isWe = (dow === 5 || dow === 6 || dow === 0);
+                const nightPrice = isWe ? (roomDayData.weekend || 1000000) : (roomDayData.weekday || 800000);
+                totalBase += nightPrice;
+                avgSurcharge = roomDayData.surcharge || 450000;
+                
+                listHtml += `
+                    <div class="flex justify-between items-center text-slate-600">
+                        <span>Đêm ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}</span>
+                        <span class="font-bold">${renderCurrency(nightPrice)}đ</span>
+                    </div>
+                `;
+            });
+
+            // Surcharge logic (Adult 3+)
+            let totalSurcharge = 0;
+            if (adultCountLocal > 2) {
+                totalSurcharge = (adultCountLocal - 2) * avgSurcharge * stayDates.length;
+            }
+
+            list.innerHTML = listHtml;
+            totalEl.textContent = renderCurrency(totalBase + totalSurcharge) + "đ";
+
+            if (totalSurcharge > 0) {
+                surchargeRow.classList.remove('hidden');
+                surchargeRow.classList.add('flex');
+                surchargeEl.textContent = "+" + renderCurrency(totalSurcharge) + "đ";
+            } else {
+                surchargeRow.classList.add('hidden');
+                surchargeRow.classList.remove('flex');
+            }
+
+            container.classList.remove('hidden');
+        };
 
         const renderDay = (d) => {
             const dStr = getStr(d);
@@ -1252,7 +1353,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             const isPast = d < today;
 
             let isBookedDay = false;
-            if (roomId) {
+            if (isPast) {
+                // Staggered fake occupancy: 4 potential free days per month [5, 12, 19, 26]
+                // Shifted based on roomId and month to create variety (staggered)
+                const salt = (roomId ? roomId.split('').reduce((a, c) => a + c.charCodeAt(0), 0) : 10) + month;
+                const offset = salt % 7;
+                const potentialFreeDays = [5, 12, 19, 26].map(d => {
+                    let next = d + offset;
+                    return next > 30 ? next - 30 : next;
+                });
+                isBookedDay = !(potentialFreeDays.includes(d.getDate()));
+            } else if (roomId) {
                 isBookedDay = isBooked(scheduleData[roomId] ? scheduleData[roomId][dStr] : null);
             } else {
                 // Global view: "Trống" if ANY room is free
@@ -1265,8 +1376,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 isBookedDay = !anyFree;
             }
 
-            const ciVal = ciInput.value;
-            const coVal = coInput.value;
+            const ciVal = ciInput.dataset.date || "";
+            const coVal = coInput.dataset.date || "";
             const ciTime = ciVal ? parseLocal(ciVal).getTime() : null;
             
             // Calculate the last NIGHT the guest stays (1 day before Check-out)
@@ -1286,14 +1397,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             let cursor = 'cursor-pointer hover:bg-gray-50';
 
             if (isBookedDay) {
-                style = 'bg-[#c8a96a] text-white font-bold opacity-90'; // matches user screenshot
+                style = 'bg-[#c8a96a] text-white font-bold' + (isPast ? ' opacity-60' : ' opacity-90');
                 cursor = 'cursor-not-allowed';
             } else if (isCI || isLastNight) {
                 style = 'bg-[#3b82f6] text-white font-bold z-10 shadow-md';
             } else if (isInRange) {
                 style = 'bg-[#3b82f6]/10 text-[#3b82f6] font-medium';
             } else if (isPast && !isToday) {
-                style = 'bg-white text-gray-400';
+                style = 'bg-white text-gray-400 opacity-60';
                 cursor = 'cursor-not-allowed';
             }
 
@@ -1395,10 +1506,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const minusChild = document.getElementById('modal-minus-child');
     const plusChild = document.getElementById('modal-plus-child');
 
-    if (minusAdult) minusAdult.addEventListener('click', () => { if (adultCountLocal > 1) { adultCountLocal--; updateGuestDisplay(); } });
-    if (plusAdult) plusAdult.addEventListener('click', () => { adultCountLocal++; updateGuestDisplay(); });
-    if (minusChild) minusChild.addEventListener('click', () => { if (childCountLocal > 0) { childCountLocal--; updateGuestDisplay(); } });
-    if (plusChild) plusChild.addEventListener('click', () => { childCountLocal++; updateGuestDisplay(); });
+    if (minusAdult) minusAdult.addEventListener('click', () => { if (adultCountLocal > 1) { adultCountLocal--; updateGuestDisplay(); if (window.updateModalPricing) window.updateModalPricing(window._currentModalRoomId); } });
+    if (plusAdult) plusAdult.addEventListener('click', () => { adultCountLocal++; updateGuestDisplay(); if (window.updateModalPricing) window.updateModalPricing(window._currentModalRoomId); });
+    if (minusChild) minusChild.addEventListener('click', () => { if (childCountLocal > 0) { childCountLocal--; updateGuestDisplay(); if (window.updateModalPricing) window.updateModalPricing(window._currentModalRoomId); } });
+    if (plusChild) plusChild.addEventListener('click', () => { childCountLocal++; updateGuestDisplay(); if (window.updateModalPricing) window.updateModalPricing(window._currentModalRoomId); });
 
     const closeModalBtn = document.getElementById('close-modal-btn');
     if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
@@ -1428,8 +1539,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const saveBtn = document.getElementById('modal-save-btn');
     if (saveBtn) {
         saveBtn.addEventListener('click', async () => {
-            const ci = checkinInput ? checkinInput.value : '';
-            const co = checkoutInput ? checkoutInput.value : '';
+            const ci = checkinInput ? (checkinInput.dataset.date || "") : '';
+            const co = checkoutInput ? (checkoutInput.dataset.date || "") : '';
             if (!ci || !co) { alert("Vui lòng chọn ngày nhận và trả phòng"); return; }
             const ciDate = parseLocal(ci);
             const coDate = parseLocal(co);
@@ -2246,12 +2357,18 @@ function jumpToGallery(index) {
 
 function closeGallery(isPopState = false) {
     const modal = document.getElementById('room-gallery-modal');
+    const bookingModal = document.getElementById('edit-booking-modal');
     if (modal) {
         if (!isPopState && history.state && (history.state.view === 'gallery-grid' || history.state.view === 'gallery-detail')) {
             history.back();
         }
         modal.classList.remove('active');
-        document.body.style.overflow = 'auto';
+        
+        // ONLY unlock scroll if booking modal is hidden
+        if (!bookingModal || bookingModal.classList.contains('hidden')) {
+            document.body.style.overflow = '';
+        }
+
         const container = document.getElementById('detail-media-container');
         if (container) container.innerHTML = '';
     }
@@ -2277,20 +2394,22 @@ window.showGrid = showGrid;
 window.openDetail = openDetail;
 
 // --- BACK BUTTON HANDLING (History API) ---
+const MODAL_VIEWS = ['booking-modal', 'gallery-grid', 'gallery-detail'];
 window.addEventListener('popstate', (event) => {
     const state = event.state;
+    const view = state ? state.view : null;
     const bookingModal = document.getElementById('edit-booking-modal');
     const galleryModal = document.getElementById('room-gallery-modal');
 
-    // Handle Booking Modal
-    if (!state || state.view !== 'booking-modal') {
+    // Handle Booking Modal - Only close if we've completely exited modal-related views
+    if (!MODAL_VIEWS.includes(view)) {
         if (bookingModal && !bookingModal.classList.contains('hidden')) {
             if (window.closeModal) window.closeModal(true);
         }
     }
 
     // Handle Gallery
-    if (!state) {
+    if (!state || state.view === 'booking-modal') {
         if (galleryModal && galleryModal.classList.contains('active')) {
             window.closeGallery(true);
         }
