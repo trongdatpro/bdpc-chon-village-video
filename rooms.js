@@ -28,6 +28,16 @@ const isBooked = (s) => {
     return clean.includes('đặt') || clean.includes('cọc') || clean.includes('thanh toán') || clean.includes('đóng') || clean.includes('booked') || clean === 'b';
 };
 
+const getStr = (d) => `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
+
+const parseLocal = (dateStr) => {
+    if (!dateStr) return null;
+    const [y, m, d] = dateStr.split('-');
+    return new Date(y, m - 1, d);
+};
+
+const formatDateObj = (d) => `${d.getDate()}/${d.getMonth() + 1}`;
+
 const convertGDriveUrl = (url, isVideo = false, highRes = false, customSize = null) => {
     if (!url) return "";
     let fileId = "";
@@ -113,27 +123,28 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const bookingData = JSON.parse(bookingDataStr);
 
-    // Parse dates reliably in local time
-    const parseLocal = (dateStr) => {
-        const [y, m, d] = dateStr.split('-');
-        return new Date(y, m - 1, d);
-    };
-
-    const checkinDate = parseLocal(bookingData.checkin);
-    const checkoutDate = parseLocal(bookingData.checkout);
-
     const adults = parseInt(bookingData.adults) || 2;
     const children = parseInt(bookingData.children) || 0;
     const childrenAgesStr = bookingData.childrenAgeCategory || "";
     const childrenAges = childrenAgesStr ? childrenAgesStr.split(',').map(a => parseInt(a)) : [];
     const isUnder6 = childrenAges.some(age => age > 0 && age < 6);
 
-    // Formatting dates for display
-    const formatDateObj = (d) => `${d.getDate()}/${d.getMonth() + 1}`;
-    const dateStr = `${formatDateObj(checkinDate)} - ${formatDateObj(checkoutDate)}`;
-    document.getElementById('summary-dates').textContent = dateStr;
-    const miniSummaryDates = document.getElementById('mini-summary-dates');
-    if (miniSummaryDates) miniSummaryDates.textContent = dateStr;
+    const checkinDate = parseLocal(bookingData.checkin);
+    const checkoutDate = parseLocal(bookingData.checkout);
+
+    window.updateBookingSummaryLabels = (checkinInputVal, checkoutInputVal) => {
+        if (!checkinInputVal || !checkoutInputVal) return;
+        const ci = parseLocal(checkinInputVal);
+        const co = parseLocal(checkoutInputVal);
+        const dateStr = `${formatDateObj(ci)} - ${formatDateObj(co)}`;
+        const summaryDates = document.getElementById('summary-dates');
+        if (summaryDates) summaryDates.textContent = dateStr;
+        const miniSummaryDates = document.getElementById('mini-summary-dates');
+        if (miniSummaryDates) miniSummaryDates.textContent = dateStr;
+    };
+
+    // Initial label update
+    window.updateBookingSummaryLabels(bookingData.checkin, bookingData.checkout);
 
     let summaryGuestsStr = `${adults} Người lớn`;
     if (children > 0) summaryGuestsStr += `, ${children} Trẻ em`;
@@ -345,7 +356,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 scheduleData[cleanRid][dateStr] = String(status).trim();
 
                 // Store Pricing, Capacity & Meta per date
-                if (!pricingData[cleanRid]) pricingData[cleanRid] = {};
+                if (!pricingData[cleanRid]) {
+                    pricingData[cleanRid] = {};
+                    // Seed default with the first valid entry for this room from Sheet
+                    pricingData[cleanRid]['default'] = {
+                        maxAdults: getVal(row.c[3], 2),
+                        maxChildren: getVal(row.c[4], 2),
+                        kidsUnder6: String(row.c[5] ? row.c[5].v : "Yes").trim(),
+                        weekday: getVal(row.c[6], 800000),
+                        weekend: getVal(row.c[7], 1000000),
+                        surcharge: getVal(row.c[8], 450000),
+                        note: ""
+                    };
+                }
                 pricingData[cleanRid][dateStr] = {
                     maxAdults: getVal(row.c[3], 2),
                     maxChildren: getVal(row.c[4], 2),
@@ -435,6 +458,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- SMART SUGGESTION ENGINE ---
     function findSmartSuggestions(checkinDate, checkoutDate, adults, children) {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+
         const originalNights = [];
         let currDate = new Date(checkinDate);
         while (currDate < checkoutDate) {
@@ -444,14 +469,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const rangeStart = new Date(checkinDate);
         rangeStart.setDate(rangeStart.getDate() - 4);
+
+        // Ensure suggestion range doesn't start in the past
+        const effectiveRangeStart = rangeStart < today ? new Date(today) : rangeStart;
+
         const rangeEnd = new Date(checkinDate);
         rangeEnd.setDate(rangeEnd.getDate() + 4);
 
         const roomAvailability = [];
 
-        localRooms.forEach(room => {
+        localRooms.forEach((room, index) => {
             const freeDatesInRange = [];
-            let scanDate = new Date(rangeStart);
+            let scanDate = new Date(effectiveRangeStart);
             while (scanDate <= rangeEnd) {
                 const dateStr = getStr(scanDate);
                 const isBookedOnDate = isBooked(scheduleData[room.id] ? scheduleData[room.id][dateStr] : null);
@@ -461,57 +490,42 @@ document.addEventListener('DOMContentLoaded', async () => {
                 scanDate.setDate(scanDate.getDate() + 1);
             }
 
-            if (freeDatesInRange.length > 0) {
-                // Check if this room covers ANY of the original nights
-                const coveredNights = originalNights.filter(nightStr => 
-                    freeDatesInRange.some(fd => getStr(fd) === nightStr)
-                );
+            // Check if this room covers ANY of the original nights
+            const coveredNights = originalNights.filter(nightStr =>
+                freeDatesInRange.some(fd => getStr(fd) === nightStr)
+            );
 
-                roomAvailability.push({
-                    room,
-                    freeDates: freeDatesInRange,
-                    coveredNights: coveredNights,
-                    isSwitchCandidate: coveredNights.length > 0 && coveredNights.length < originalNights.length
-                });
-            }
+            roomAvailability.push({
+                room,
+                index,
+                freeDates: freeDatesInRange,
+                coveredNights: coveredNights,
+                isSwitchCandidate: coveredNights.length > 0 && coveredNights.length < originalNights.length
+            });
         });
 
-        // Limit results to best matches to avoid flooding. Sort by coverage first, then by total free days.
-        return roomAvailability.sort((a,b) => {
-            if (b.coveredNights.length !== a.coveredNights.length) {
-                return b.coveredNights.length - a.coveredNights.length;
-            }
-            return b.freeDates.length - a.freeDates.length;
-        }).slice(0, 5);
+        // Always return all rooms in their original order
+        return roomAvailability.sort((a, b) => a.index - b.index);
     }
 
     function formatFreeDates(dates) {
         if (!dates || dates.length === 0) return "";
-        
-        // Group consecutive dates
         const groups = [];
         let currentGroup = [dates[0]];
-
         for (let i = 1; i < dates.length; i++) {
-            const prev = dates[i - 1];
-            const curr = dates[i];
-            const diff = (curr - prev) / (1000 * 60 * 60 * 24);
-            
+            const diff = Math.round((dates[i] - dates[i - 1]) / (1000 * 60 * 60 * 24));
             if (diff === 1) {
-                currentGroup.push(curr);
+                currentGroup.push(dates[i]);
             } else {
                 groups.push(currentGroup);
-                currentGroup = [curr];
+                currentGroup = [dates[i]];
             }
         }
         groups.push(currentGroup);
-
-        return groups.map((group, idx) => {
-            if (group.length === 1) return group[0].getDate().toString();
-            // 21, 22, 23 và 24
-            const dayNumbers = group.map(d => d.getDate());
-            const lastDay = dayNumbers.pop();
-            return dayNumbers.join(', ') + ' và ' + lastDay;
+        return groups.map(g => {
+            const f = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+            if (g.length === 1) return f(g[0]);
+            return `${f(g[0])}-${f(g[g.length - 1])}`;
         }).join(' hoặc ');
     }
 
@@ -581,6 +595,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             let isAvailable = true;
             let totalRoomBasePrice = 0;
             let isHolidayStay = false;
+            let forceIndividual = false;
             let roomImg = room.img;
 
             // 1. Check if room is available for ALL days and sum the price
@@ -597,9 +612,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
 
                 const roomDayData = (pricingData[room.id] && pricingData[room.id][dateStr]) || {};
+                const dayNote = (roomDayData.note || "").toLowerCase().normalize("NFC");
+                if (dayNote.includes("t") || dayNote.includes("l")) forceIndividual = true;
 
                 // Track if any night in the stay is a holiday
-                const dayNote = (roomDayData.note || "").toLowerCase().normalize("NFC");
                 const isDayHoliday = /l[ễễe]/.test(dayNote) || dayNote.includes("holiday") || /\bl\b/.test(dayNote);
 
                 if (isDayHoliday) {
@@ -692,7 +708,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (isOneNightStay) {
                 // 1-Night Rules:
                 const ciDate = new Date(checkin);
-                
+
                 // Get Night Before Check-in
                 const prevDate = new Date(ciDate);
                 prevDate.setDate(prevDate.getDate() - 1);
@@ -764,15 +780,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Pricing Breakdown Display
             let priceHtml = "";
-            const formatDateShort = (d) => `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`;
+            const formatDateShort = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 
             priceHtml = `
                 <div class="flex flex-col gap-0.5 -ml-3">
                     <p class="text-[11px] text-black uppercase tracking-tight mb-1">Giá Niêm Yết</p>
                     <div class="space-y-1">`;
 
-            if (baseWeekday !== baseWeekend) {
-                // DIFFERENT: Show BOTH stacked (Image 2)
+            if (!forceIndividual) {
+                // DEFAULT: Show BOTH stacked (Image in Step 272)
                 priceHtml += `
                     <div class="flex items-baseline gap-1 whitespace-nowrap">
                         <span class="text-[15px] font-bold text-graphite leading-none">${renderCurrency(baseWeekday)}</span>
@@ -782,31 +798,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <span class="text-[15px] font-bold text-graphite leading-none">${renderCurrency(baseWeekend)}</span>
                         <span class="text-[12px] font-normal text-black">/ Đêm Cuối Tuần (Thứ 6 - Chủ Nhật)</span>
                     </div>`;
-
-                // Show holiday nights if any in stay
-                groupedNights.forEach(group => {
-                    if (group.isHoliday) {
-                        const dateLabel = group.count > 1
-                            ? `Giá Ngày ${formatDateShort(group.startDate)}-${formatDateShort(group.endDate)} :`
-                            : `Giá Ngày Lễ ${formatDateShort(group.startDate)} :`;
-                        priceHtml += `
-                            <div class="flex items-baseline gap-1 whitespace-nowrap">
-                                <span class="text-[12px] font-normal text-black">${dateLabel}</span>
-                                <span class="text-[15px] font-bold text-graphite leading-none">${renderCurrency(group.price)}</span>
-                                <span class="text-[12px] font-normal text-black">/ 1 Đêm</span>
-                            </div>`;
-                    }
-                });
             } else {
-                // SAME: Show dates for stay (Image 3)
-                priceHtml += groupedNights.map(group => {
-                    const dateLabel = group.count > 1
-                        ? `Giá Ngày ${formatDateShort(group.startDate)}-${formatDateShort(group.endDate)} :`
-                        : `Giá ${group.isHoliday ? 'Ngày Lễ ' : 'Ngày '}${formatDateShort(group.startDate)} :`;
+                // FORCE INDIVIDUAL DISPLAY for 't' or 'l' Note
+                priceHtml += nightlyDetails.map(n => {
+                    const label = n.isHoliday ? "Giá Lễ Ngày" : "Giá Ngày";
                     return `
                         <div class="flex items-baseline gap-1 whitespace-nowrap">
-                            <span class="text-[12px] font-normal text-black">${dateLabel}</span>
-                            <span class="text-[15px] font-bold text-graphite leading-none">${renderCurrency(group.price)}</span>
+                            <span class="text-[12px] font-normal text-black">${label} ${formatDateShort(n.date)} :</span>
+                            <span class="text-[15px] font-bold text-graphite leading-none">${renderCurrency(n.price)}</span>
                             <span class="text-[12px] font-normal text-black">/ 1 Đêm</span>
                         </div>`;
                 }).join('');
@@ -839,7 +838,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </div>`;
 
             const card = document.createElement('div');
-            card.className = "scroll-animate-card"; 
+            card.className = "scroll-animate-card";
             card.innerHTML = buildRoomCardHTML(room, roomImg, amenitiesHtml, specialAttrHtml, priceHtml, buttonHtml);
             roomsContainer.appendChild(card);
         });
@@ -858,7 +857,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const STATIC_POLICY = { 1: 5, 2: 5, 3: 4, 4: 7, 5: 7, 6: 5, 7: 5, 8: 5, 9: 7, 10: 7, 11: 7, 12: 5 };
         let minDaysLead = (dynamicPolicyData && dynamicPolicyData.find(p => p.Month_ID === monthId))?.Min_Days_Lead || STATIC_POLICY[monthId] || 7;
         const isWithinPeriod = daysLead <= minDaysLead;
-        
+
         let totalAvailableOnCheckin = 0;
         if (scheduleData) {
             Object.keys(scheduleData).forEach(roomId => {
@@ -884,7 +883,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // --- SMART SUGGESTIONS ---
             const suggestions = findSmartSuggestions(checkinDate, checkoutDate, adults, children);
-            
+
             if (suggestions.length > 0) {
                 roomsContainer.innerHTML = `
                     <div class="col-span-full mt-4 mb-2">
@@ -900,14 +899,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const baseWeekday = roomDayData.weekday || 800000;
                     const baseWeekend = roomDayData.weekend || 1000000;
                     const selectedSurcharge = roomDayData.surcharge || 450000;
-                    
+
                     let roomImg = room.img;
                     if (galleryData[room.id] && galleryData[room.id].length > 0) {
                         roomImg = convertGDriveUrl(galleryData[room.id][0].url, false);
                     }
 
                     const freeDatesStr = formatFreeDates(s.freeDates);
-                    
+
                     // --- Reconstruct standard UI components ---
                     const specialAttrHtml = room.special ? `
                         <div class="bg-primary/10 border border-primary/20 rounded p-2 mb-2">
@@ -946,34 +945,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const buttonHtml = `
                         <div class="relative p-[3px] rounded-xl bg-gradient-to-b from-[#BF953F] via-[#FCF6BA] to-[#AA771C] shadow-lg shadow-black/20 group/btn active:scale-95 transition-transform duration-300">
                             <div class="p-[1px] rounded-[9px] bg-gradient-to-b from-[#AA771C] via-[#FCF6BA] to-[#BF953F]">
-                                <button data-room-id="${room.id}" onclick='selectRoom(this, ${JSON.stringify({
-                                    id: room.id,
-                                    name: room.name,
-                                    img: roomImg,
-                                    baseRoomTotal: 0, // Not available for original dates, but keeping structure
-                                    nights: datesToStay.length,
-                                    surcharge: selectedSurcharge,
-                                    baseWeekday: baseWeekday,
-                                    baseWeekend: baseWeekend,
-                                    groupedNights: [],
-                                    nightlyDetails: []
-                                })})' 
+                                <button data-room-id="${room.id}" onclick='openSuggestionModal("${room.id}")'
                                     class="${isAlreadySelected ? 'bg-[#A0824B] text-white pointer-events-none' : 'bg-primary text-white'} hover:bg-[#A0824B] font-sans tracking-wider font-bold text-[15px] sm:text-[16px] py-2.5 px-8 rounded-[8px] transition-all duration-500 flex items-center justify-center leading-none uppercase w-full whitespace-nowrap">
-                                    ${isAlreadySelected ? 'Đã Chọn' : 'Chọn Phòng'}
+                                    ${isAlreadySelected ? 'Đã Chọn' : 'Đổi Ngày'}
                                 </button>
                             </div>
                         </div>`;
 
+                    const suggestionText = freeDatesStr
+                        ? `Phòng ${room.name} đang trống các ngày: ${freeDatesStr}`
+                        : "Vui lòng liên hệ Zalo để kiểm tra ngày trống gần nhất.";
+
                     const extraInfoHtml = `
-                        <div class="bg-red-50/50 p-2 rounded border border-red-100 mb-0">
-                             ${s.isSwitchCandidate ? `
-                                <div class="inline-flex items-center gap-1 text-[12px] font-bold text-red-600 uppercase mb-1">
-                                    <span class="material-symbols-outlined text-[13px]">swap_horiz</span>
-                                    Gợi ý phòng trống gần ngày bạn chọn nhất.
-                                </div>
-                            ` : ''}
-                            <p class="text-[13px] text-red-600 font-medium italic">
-                                Trống ngày ${freeDatesStr}
+                        <div class="bg-red-50/50 p-2 rounded border border-red-100 mb-0 flex flex-col items-start gap-1">
+                            <div class="text-[11px] sm:text-[12px] font-bold text-red-600 uppercase whitespace-nowrap tracking-tighter w-full text-left">
+                                Gợi ý phòng trống gần ngày bạn chọn nhất.
+                            </div>
+                            <p class="text-[13px] text-red-600 font-medium italic text-left">
+                                ${suggestionText}
                             </p>
                         </div>
                     `;
@@ -1043,22 +1032,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const todayVal = new Date().toISOString().split('T')[0];
     if (checkinInput && checkoutInput) {
-        checkinInput.min = todayVal;
-        checkinInput.addEventListener('change', () => {
-            if (checkinInput.value) {
-                const ciDate = new Date(checkinInput.value);
+        // We will update .min dynamically in renderRoomMonthCalendar based on room occupancy
 
-                // Set min checkout to at least +1 day
-                const minDate = new Date(ciDate);
-                minDate.setDate(minDate.getDate() + 1);
-                checkoutInput.min = minDate.toISOString().split('T')[0];
-
-                // Automatically set checkout value to +2 days by default
-                const defaultCheckout = new Date(ciDate);
-                defaultCheckout.setDate(defaultCheckout.getDate() + 2);
-                checkoutInput.value = defaultCheckout.toISOString().split('T')[0];
+        const syncFromInput = (input) => {
+            if (input.value) {
+                // If the user manually changes the date via the native picker,
+                // we treat it as a fresh calendar click.
+                if (window.handleCalendarDateClick) {
+                    window.handleCalendarDateClick(input.value);
+                }
             }
-        });
+        };
+
+        checkinInput.addEventListener('change', () => syncFromInput(checkinInput));
+        checkoutInput.addEventListener('change', () => syncFromInput(checkoutInput));
     }
 
     const modalAgeContainer = document.getElementById('modal-children-ages-container');
@@ -1088,6 +1075,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     const openModal = (isPopState = false) => {
+        window._calendarFirstClick = true;
         if (!isPopState) {
             history.pushState({ view: 'booking-modal' }, '');
         }
@@ -1112,19 +1100,268 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (modal) {
             modal.classList.remove('hidden');
             modal.classList.add('flex');
+            document.body.style.overflow = 'hidden'; // Lock scroll
             void modal.offsetWidth;
             modal.classList.remove('opacity-0');
             if (modalContent) modalContent.classList.remove('translate-y-full');
         }
     };
+    window.openModal = openModal;
+
+    window.openSuggestionModal = (roomId) => {
+        const today = new Date();
+        renderRoomMonthCalendar(roomId, today.getMonth(), today.getFullYear());
+        openModal();
+    };
+
+    function renderRoomMonthCalendar(roomId, month, year) {
+        const container = document.getElementById('modal-room-calendar');
+        if (!container) return;
+        container.classList.remove('hidden');
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Update native input MIN date based on room occupancy
+        const ciInput = document.getElementById('modal-checkin');
+        const coInput = document.getElementById('modal-checkout');
+        if (ciInput && scheduleData[roomId]) {
+            let firstFree = new Date(today);
+            while (true) {
+                const ffStr = getStr(firstFree);
+                const isRoomBooked = isBooked(scheduleData[roomId][ffStr]);
+                if (!isRoomBooked) break;
+                firstFree.setDate(firstFree.getDate() + 1);
+                // Safety break 1 month
+                if (firstFree.getTime() > today.getTime() + 30 * 86400000) break;
+            }
+            ciInput.min = getStr(firstFree);
+        }
+
+        // Month calculations (Local)
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const numDays = lastDay.getDate();
+
+        // Leading days from prev month
+        const prevLastDay = new Date(year, month, 0).getDate();
+        let firstDayIdx = firstDay.getDay();
+        let padding = firstDayIdx === 0 ? 6 : firstDayIdx - 1;
+
+        // Current selection from inputs
+        const ciDate = ciInput && ciInput.value ? parseLocal(ciInput.value) : null;
+        const coDate = coInput && coInput.value ? parseLocal(coInput.value) : null;
+
+        const monthNames = ["Một", "Hai", "Ba", "Bốn", "Năm", "Sáu", "Bảy", "Tám", "Chín", "Mười", "Mười Một", "Mười Hai"];
+        const dayHeaders = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+
+        // Navigation
+        window.changeCalendarMonth = (offset) => {
+            let newMonth = month + offset;
+            let newYear = year;
+            if (newMonth < 0) { newMonth = 11; newYear--; }
+            if (newMonth > 11) { newMonth = 0; newYear++; }
+            renderRoomMonthCalendar(roomId, newMonth, newYear);
+        };
+
+        if (typeof window._calendarFirstClick === 'undefined') window._calendarFirstClick = true;
+
+        window.handleCalendarDateClick = (dateStr) => {
+            const checkin = document.getElementById('modal-checkin');
+            const checkout = document.getElementById('modal-checkout');
+            if (!checkin || !checkout) return;
+
+            const d = new Date(dateStr);
+            d.setHours(0, 0, 0, 0);
+
+            if (d < today) return;
+
+            const isBookedClick = isBooked(scheduleData[roomId] ? scheduleData[roomId][dateStr] : null);
+
+            // --- TOGGLE OFF ---
+            if (checkin.value === dateStr) {
+                checkin.value = "";
+                checkout.value = "";
+                window._calendarFirstClick = true;
+            }
+            // If starting a NEW stay (First click, or no CI, or earlier CI)
+            else if (window._calendarFirstClick || !checkin.value || dateStr < checkin.value) {
+                if (isBookedClick) return; // Cannot start a stay on a booked night
+
+                checkin.value = dateStr;
+                const nextD = new Date(d);
+                nextD.setDate(nextD.getDate() + 1);
+                checkout.value = getStr(nextD);
+                window._calendarFirstClick = false;
+            } else {
+                // EXTEND: Always CO = Last Night Clicked + 1
+                const nextD = new Date(d);
+                nextD.setDate(nextD.getDate() + 1);
+                checkout.value = getStr(nextD);
+            }
+
+            // --- NUCLEAR SYNC ---
+            // Force Checkout to stay exactly 1 day after the clicked date if extending
+            if (!window._calendarFirstClick && dateStr >= checkin.value) {
+                const nextD = new Date(d);
+                nextD.setDate(nextD.getDate() + 1);
+                checkout.value = getStr(nextD);
+            }
+
+            // Sync Main Labels
+            if (window.updateBookingSummaryLabels) {
+                window.updateBookingSummaryLabels(checkin.value, checkout.value);
+            }
+
+            // Trigger events for other scripts
+            // We use a flag to prevent infinite loops from the listeners we are about to add
+            if (!window._isSyncingFromNative) {
+                checkin.dispatchEvent(new Event('input', { bubbles: true }));
+                checkin.dispatchEvent(new Event('change', { bubbles: true }));
+                checkout.dispatchEvent(new Event('input', { bubbles: true }));
+                checkout.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            renderRoomMonthCalendar(roomId, month, year);
+        };
+
+        // NUCLEAR SYNC: Re-bind listeners for native input changes
+        if (ciInput && coInput && !ciInput._hasSyncListener) {
+            const syncFromNative = (e) => {
+                if (window._isSyncingFromNative) return;
+                try {
+                    window._isSyncingFromNative = true;
+                    window.handleCalendarDateClick(e.target.value);
+                } finally {
+                    window._isSyncingFromNative = false;
+                }
+            };
+            ciInput.addEventListener('change', syncFromNative);
+            coInput.addEventListener('change', syncFromNative);
+            ciInput._hasSyncListener = true;
+        }
+
+        const renderDay = (d, isCurrentMonth) => {
+            const dStr = getStr(d);
+            const isToday = d.getTime() === today.getTime();
+            const isPast = d < today;
+
+            let isBookedDay;
+            if (isPast && !isToday) {
+                const seed = d.getMonth() + d.getFullYear() + (roomId ? roomId.charCodeAt(0) : 0);
+                const empty1 = (seed % 7) + 2; const empty2 = (seed % 7) + 12; const empty3 = (seed % 7) + 22;
+                isBookedDay = ![empty1, empty2, empty3].includes(d.getDate());
+            } else {
+                isBookedDay = isBooked(scheduleData[roomId] ? scheduleData[roomId][dStr] : null);
+            }
+
+            // HIGHLIGHT: CI through (CO - 1)
+            const ciVal = ciInput.value;
+            const coVal = coInput.value;
+            const ciTime = ciVal ? parseLocal(ciVal).getTime() : null;
+            const lastStayTime = coVal ? (parseLocal(coVal).getTime() - 86400000) : null;
+
+            let isSelected = (ciTime && d.getTime() === ciTime) || (lastStayTime && d.getTime() === lastStayTime);
+            let isInRange = ciTime && lastStayTime && d.getTime() > ciTime && d.getTime() < lastStayTime;
+
+            let style = 'bg-white text-graphite border border-gray-50';
+            let cursor = 'cursor-pointer hover:bg-gray-50';
+
+            if (isBookedDay) {
+                style = 'bg-[#c8a96a] text-white font-bold opacity-90';
+                cursor = 'cursor-not-allowed';
+            } else if (isSelected) {
+                style = 'bg-[#3b82f6] text-white font-bold z-10 shadow-md';
+            } else if (isInRange) {
+                style = 'bg-[#3b82f6]/10 text-[#3b82f6] font-medium';
+            } else if (isPast && !isToday) {
+                style = 'bg-white text-gray-400';
+                cursor = 'cursor-not-allowed';
+            }
+
+            if (isToday && !isSelected && !isBookedDay) style += ' ring-1 ring-[#c8a96a] ring-inset';
+
+            const isCurrentM = d.getMonth() === month;
+            const dayText = `<span class="${isCurrentM ? 'opacity-100' : 'opacity-60'}">${d.getDate()}/${d.getMonth() + 1}</span>`;
+
+            return `
+                <div onclick="handleCalendarDateClick('${dStr}')" 
+                     class="${style} ${cursor} h-9 rounded-md flex items-center justify-center text-[11px] relative transition-all duration-200">
+                    ${dayText}
+                    ${isToday && !isBookedDay ? '<div class="absolute bottom-1 w-1 h-1 bg-[#c8a96a] rounded-full"></div>' : ''}
+                    ${isPast && !isToday ? '<div class="absolute inset-0 bg-white/40 pointer-events-none rounded-md"></div>' : ''}
+                </div>
+            `;
+        };
+
+        const gridDays = [];
+        for (let i = padding - 1; i >= 0; i--) {
+            gridDays.push({ date: new Date(year, month, -i), current: false });
+        }
+        for (let i = 1; i <= numDays; i++) {
+            gridDays.push({ date: new Date(year, month, i), current: true });
+        }
+        const remaining = 42 - gridDays.length;
+        for (let i = 1; i <= remaining; i++) {
+            gridDays.push({ date: new Date(year, month + 1, i), current: false });
+        }
+
+        let html = `
+            <div class="bg-white p-3 rounded-lg border border-[#c8a96a]/30 shadow-lg w-full font-sans select-none">
+                <div class="flex items-center justify-between mb-2 border-b border-[#c8a96a]/10 pb-2">
+                    <h4 class="text-base font-bold text-graphite font-display tracking-tight">Tháng ${monthNames[month]} ${year}</h4>
+                    <div class="flex gap-2">
+                        <button onclick="changeCalendarMonth(-1)" class="p-1 px-2 hover:bg-gray-100 rounded-lg transition-colors border border-gray-100">
+                            <span class="material-symbols-outlined text-xl leading-none cursor-pointer">keyboard_arrow_left</span>
+                        </button>
+                        <button onclick="changeCalendarMonth(1)" class="p-1 px-2 hover:bg-gray-100 rounded-lg transition-colors border border-gray-100">
+                            <span class="material-symbols-outlined text-xl leading-none cursor-pointer">keyboard_arrow_right</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-7 gap-1">
+                    ${dayHeaders.map(h => `<div class="text-[11px] text-[#c8a96a] text-center font-bold pb-1 uppercase tracking-widest">${h}</div>`).join('')}
+                </div>
+                <div class="grid grid-cols-7 gap-1">
+                    ${gridDays.map(gd => renderDay(gd.date, gd.current)).join('')}
+                </div>
+                <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-100">
+                    <button onclick="renderRoomMonthCalendar('${roomId}', ${today.getMonth()}, ${today.getFullYear()})" 
+                            class="text-[10px] text-[#c8a96a] font-bold uppercase tracking-widest hover:bg-gray-50 px-2 py-1 rounded transition-colors cursor-pointer">Hôm nay</button>
+                    <div class="flex items-center gap-4">
+                         <div class="flex items-center gap-1.5">
+                            <div class="w-3 h-3 bg-[#c8a96a] rounded-sm shadow-sm"></div>
+                            <span class="text-[9px] text-gray-500 uppercase font-bold">Hết phòng</span>
+                         </div>
+                         <div class="flex items-center gap-1.5">
+                            <div class="w-3 h-3 bg-white border border-gray-200 rounded-sm shadow-sm"></div>
+                            <span class="text-[9px] text-gray-500 uppercase font-bold">Trống</span>
+                         </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.innerHTML = html;
+    }
+
+
 
     const closeModal = (isPopState = false) => {
         if (modal) {
+            document.body.style.overflow = ''; // Unlock scroll
             if (!isPopState && history.state && history.state.view === 'booking-modal') {
                 history.back();
             }
             modal.classList.add('opacity-0');
             if (modalContent) modalContent.classList.add('translate-y-full');
+
+            // Hide and clear room calendar
+            const container = document.getElementById('modal-room-calendar');
+            if (container) {
+                container.classList.add('hidden');
+                container.innerHTML = '';
+            }
+
             setTimeout(() => {
                 modal.classList.add('hidden');
                 modal.classList.remove('flex');
@@ -1197,15 +1434,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (daysLead > minDaysLead) {
                     // 2. Check Triple-Gap from memory (Booked-Available-Booked)
                     const getStrLocal = d => {
-                        const yy = d.getFullYear(); 
-                        const mm = String(d.getMonth() + 1).padStart(2, '0'); 
+                        const yy = d.getFullYear();
+                        const mm = String(d.getMonth() + 1).padStart(2, '0');
                         const dd = String(d.getDate()).padStart(2, '0');
                         return `${yy}-${mm}-${dd}`;
                     };
-                    
+
                     const ciStr = getStrLocal(ciDate);
                     const coStr = getStrLocal(coDate);
-                    
+
                     const prDate = new Date(ciDate);
                     prDate.setDate(prDate.getDate() - 1);
                     const prStr = getStrLocal(prDate);
@@ -1245,6 +1482,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const childrenAgeStr = modalChildrenAges.join(',');
 
+
+
             sessionStorage.setItem('chonVillageBooking', JSON.stringify({
                 ...bookingData,
                 checkin: ci,
@@ -1272,12 +1511,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 headerTitle?.classList.replace('text-[28px]', 'text-[22px]');
                 headerDecorTop?.classList.remove('opacity-0');
                 headerDecorBottom?.classList.remove('opacity-0');
-                
+
                 // Show the full right container (button + mini summary)
                 headerRightContainer?.classList.replace('opacity-0', 'opacity-100');
                 headerRightContainer?.classList.remove('pointer-events-none');
                 headerRightContainer?.classList.replace('scale-90', 'scale-100');
-                
+
                 changeDateBtn?.classList.add('opacity-0', 'pointer-events-none');
             } else {
                 headerTitleContainer?.classList.replace('left-4', 'left-1/2');
@@ -1285,12 +1524,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 headerTitle?.classList.replace('text-[22px]', 'text-[28px]');
                 headerDecorTop?.classList.add('opacity-0');
                 headerDecorBottom?.classList.add('opacity-0');
-                
+
                 // Hide right container
                 headerRightContainer?.classList.replace('opacity-100', 'opacity-0');
                 headerRightContainer?.classList.add('pointer-events-none');
                 headerRightContainer?.classList.replace('scale-100', 'scale-90');
-                
+
                 changeDateBtn?.classList.remove('opacity-0', 'pointer-events-none');
             }
         });
