@@ -1083,8 +1083,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             history.pushState({ view: 'booking-modal' }, '');
         }
 
-        if (checkinInput) checkinInput.value = bookingData.checkin;
-        if (checkoutInput) checkoutInput.value = bookingData.checkout;
+        if (checkinInput) checkinInput.value = "";
+        if (checkoutInput) checkoutInput.value = "";
         adultCountLocal = parseInt(bookingData.adults) || 2;
         childCountLocal = parseInt(bookingData.children) || 0;
 
@@ -1170,10 +1170,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const currentCI = checkin.value;
                 const currentCO = checkout.value;
 
-                if (currentCI === dateStr) {
+                // Helper for interaction: Get stay night boundaries
+                const getNextDayStr = (dStr) => {
+                    const d = new Date(dStr);
+                    d.setDate(d.getDate() + 1);
+                    return getStr(d);
+                };
+                const getPrevDayStr = (dStr) => {
+                    const d = new Date(dStr);
+                    d.setDate(d.getDate() - 1);
+                    return getStr(d);
+                };
+                const lastStayNight = currentCO ? getPrevDayStr(currentCO) : null;
+                const isRange = currentCI && lastStayNight && (currentCI !== lastStayNight);
+
+                if (currentCI === dateStr || lastStayNight === dateStr) {
+                    // Reset if clicking either boundary
                     checkin.value = "";
                     checkout.value = "";
-                } else if (!currentCI || dateStr < currentCI || (currentCI && currentCO)) {
+                } else if (!currentCI || dateStr < currentCI || isRange) {
+                    // Start fresh if: nothing selected, clicking earlier, OR a range is already set
                     let isNBooked = false;
                     if (rId) isNBooked = isBooked(scheduleData[rId] ? scheduleData[rId][dateStr] : null);
                     else {
@@ -1184,23 +1200,31 @@ document.addEventListener('DOMContentLoaded', async () => {
                         isNBooked = !anyF;
                     }
                     if (isNBooked) return;
+
                     checkin.value = dateStr;
-                    checkout.value = "";
+                    checkout.value = getNextDayStr(dateStr);
                 } else {
+                    // Extension: Clicked date > CI and it's currently only 1 night
                     let tempCI = new Date(currentCI);
-                    let tempCO = new Date(dateStr);
+                    let tempLastStay = new Date(dateStr);
                     let canSelect = true;
+                    
                     if (rId) {
                         let scan = new Date(tempCI);
-                        while (scan < tempCO) {
+                        while (scan <= tempLastStay) {
                             if (isBooked(scheduleData[rId] ? scheduleData[rId][getStr(scan)] : null)) {
                                 canSelect = false; break;
                             }
                             scan.setDate(scan.getDate() + 1);
                         }
                     }
-                    if (canSelect) checkout.value = dateStr;
-                    else { checkin.value = dateStr; checkout.value = ""; }
+                    
+                    if (canSelect) {
+                        checkout.value = getNextDayStr(dateStr);
+                    } else {
+                        checkin.value = dateStr;
+                        checkout.value = getNextDayStr(dateStr);
+                    }
                 }
 
                 if (window.updateBookingSummaryLabels) {
@@ -1244,11 +1268,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             const ciVal = ciInput.value;
             const coVal = coInput.value;
             const ciTime = ciVal ? parseLocal(ciVal).getTime() : null;
-            const coTime = coVal ? parseLocal(coVal).getTime() : null;
+            
+            // Calculate the last NIGHT the guest stays (1 day before Check-out)
+            // Use parseLocal to ensure time (00:00:00) matches perfectly with current 'd'
+            let lastStayNightTime = null;
+            if (coVal) {
+                const coDate = parseLocal(coVal);
+                coDate.setDate(coDate.getDate() - 1);
+                lastStayNightTime = coDate.getTime();
+            }
 
             let isCI = ciTime && d.getTime() === ciTime;
-            let isCO = coTime && d.getTime() === coTime;
-            let isInRange = ciTime && coTime && d.getTime() > ciTime && d.getTime() < coTime;
+            let isLastNight = lastStayNightTime && d.getTime() === lastStayNightTime;
+            let isInRange = ciTime && lastStayNightTime && d.getTime() > ciTime && d.getTime() < lastStayNightTime;
 
             let style = 'bg-white text-graphite border border-gray-100';
             let cursor = 'cursor-pointer hover:bg-gray-50';
@@ -1256,7 +1288,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (isBookedDay) {
                 style = 'bg-[#c8a96a] text-white font-bold opacity-90'; // matches user screenshot
                 cursor = 'cursor-not-allowed';
-            } else if (isCI || isCO) {
+            } else if (isCI || isLastNight) {
                 style = 'bg-[#3b82f6] text-white font-bold z-10 shadow-md';
             } else if (isInRange) {
                 style = 'bg-[#3b82f6]/10 text-[#3b82f6] font-medium';
@@ -1265,7 +1297,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 cursor = 'cursor-not-allowed';
             }
 
-            if (isToday && !isCI && !isCO && !isBookedDay) style += ' ring-1 ring-[#c8a96a] ring-inset';
+            if (isToday && !isCI && !isLastNight && !isBookedDay) style += ' ring-1 ring-[#c8a96a] ring-inset';
 
             const dInMonth = d.getMonth() === month;
             const dayText = `<span class="${dInMonth ? 'opacity-100' : 'opacity-40'}">${d.getDate()}/${d.getMonth() + 1}</span>`;
