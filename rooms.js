@@ -123,8 +123,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const bookingData = JSON.parse(bookingDataStr);
 
-    const adults = parseInt(bookingData.adults) || 2;
-    const children = parseInt(bookingData.children) || 0;
+    let adults = parseInt(bookingData.adults) || 2;
+    let children = parseInt(bookingData.children) || 0;
     const childrenAgesStr = bookingData.childrenAgeCategory || "";
     const childrenAges = childrenAgesStr ? childrenAgesStr.split(',').map(a => parseInt(a)) : [];
     const isUnder6 = childrenAges.some(age => age > 0 && age < 6);
@@ -146,11 +146,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initial label update
     window.updateBookingSummaryLabels(bookingData.checkin, bookingData.checkout);
 
-    let summaryGuestsStr = `${adults} Người lớn`;
-    if (children > 0) summaryGuestsStr += `, ${children} Trẻ em`;
-    document.getElementById('summary-guests').textContent = summaryGuestsStr;
-    const miniSummaryGuests = document.getElementById('mini-summary-guests');
-    if (miniSummaryGuests) miniSummaryGuests.textContent = summaryGuestsStr;
+    const updateGuestLabels = (a, c) => {
+        let label = `${a} Người lớn`;
+        if (c > 0) label = `${a} NL, ${c} TE`;
+        return label;
+    };
+
+    const initialGuestLabel = updateGuestLabels(adults, children);
+    if (document.getElementById('summary-guests')) document.getElementById('summary-guests').textContent = initialGuestLabel;
+    if (document.getElementById('mini-summary-guests')) document.getElementById('mini-summary-guests').textContent = initialGuestLabel;
 
     const roomsContainer = document.getElementById('rooms-container');
     roomsContainer.innerHTML = `
@@ -478,17 +482,51 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const roomAvailability = [];
 
+        // Helper to check 1-night policy (Used in suggestions)
+        const checkOneNightPolicy = (roomId, dateStr) => {
+            const d = new Date(dateStr);
+            const today = new Date();
+            const isCurrentMonth = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth();
+
+            // Rule: Lead Time only applies to stays starting in the current calendar month
+            if (isCurrentMonth) {
+                const daysLead = Math.ceil((d - today) / (1000 * 60 * 60 * 24));
+                const monthId = d.getMonth() + 1;
+                const STATIC_POLICY = { 1: 5, 2: 5, 3: 4, 4: 7, 5: 7, 6: 5, 7: 5, 8: 5, 9: 7, 10: 7, 11: 7, 12: 5 };
+                const mPolicy = (dynamicPolicyData || []).find(p => p.Month_ID === monthId);
+                const minDaysLead = (mPolicy && mPolicy.Min_Days_Lead !== null) ? mPolicy.Min_Days_Lead : (STATIC_POLICY[monthId] || 7);
+
+                if (daysLead <= minDaysLead) return true;
+            }
+
+            // Perfect Sandwich Check (Always allowed regardless of month)
+            const pr = new Date(d); pr.setDate(pr.getDate() - 1);
+            const nx = new Date(d); nx.setDate(nx.getDate() + 1);
+            const isBookedBefore = isBooked(scheduleData[roomId] ? scheduleData[roomId][getStr(pr)] : null);
+            const isBookedAfter = isBooked(scheduleData[roomId] ? scheduleData[roomId][getStr(nx)] : null);
+            return isBookedBefore && isBookedAfter;
+        };
+
         localRooms.forEach((room, index) => {
-            const freeDatesInRange = [];
+            const tempFreeDates = [];
             let scanDate = new Date(effectiveRangeStart);
             while (scanDate <= rangeEnd) {
                 const dateStr = getStr(scanDate);
                 const isBookedOnDate = isBooked(scheduleData[room.id] ? scheduleData[room.id][dateStr] : null);
                 if (!isBookedOnDate) {
-                    freeDatesInRange.push(new Date(scanDate));
+                    tempFreeDates.push(new Date(scanDate));
                 }
                 scanDate.setDate(scanDate.getDate() + 1);
             }
+
+            // Filter tempFreeDates to only include bookable 1-night gaps or part of 2+ night ranges
+            const freeDatesInRange = tempFreeDates.filter((d, i, arr) => {
+                const prevFree = i > 0 && Math.round((d - arr[i - 1]) / 86400000) === 1;
+                const nextFree = i < arr.length - 1 && Math.round((arr[i + 1] - d) / 86400000) === 1;
+
+                if (prevFree || nextFree) return true; // Part of a range
+                return checkOneNightPolicy(room.id, getStr(d)); // Isolated 1-night
+            });
 
             // Check if this room covers ANY of the original nights
             const coveredNights = originalNights.filter(nightStr =>
@@ -708,20 +746,29 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (isOneNightStay) {
                 // 1-Night Rules:
                 const ciDate = new Date(checkin);
+                const today = new Date(); today.setHours(0, 0, 0, 0);
+                const isCurrentMonth = ciDate.getFullYear() === today.getFullYear() && ciDate.getMonth() === today.getMonth();
 
-                // Get Night Before Check-in
+                const daysLead = Math.ceil((ciDate - today) / (1000 * 60 * 60 * 24));
+                const monthId = ciDate.getMonth() + 1;
+                const STATIC_POLICY = { 1: 5, 2: 5, 3: 4, 4: 7, 5: 7, 6: 5, 7: 5, 8: 5, 9: 7, 10: 7, 11: 7, 12: 5 };
+                let minDaysLead = (dynamicPolicyData && dynamicPolicyData.find(p => p.Month_ID === monthId))?.Min_Days_Lead || STATIC_POLICY[monthId] || 7;
+
+                // getNightBefore & getNightAfter...
                 const prevDate = new Date(ciDate);
                 prevDate.setDate(prevDate.getDate() - 1);
                 const prevDateStr = getStr(prevDate);
                 const isBookedBefore = isBooked(scheduleData[room.id] ? scheduleData[room.id][prevDateStr] : null);
 
-                // Get Night After Check-out (The next night)
                 const nextDate = new Date(ciDate);
                 nextDate.setDate(nextDate.getDate() + 1);
                 const nextDateStr = getStr(nextDate);
                 const isBookedAfter = isBooked(scheduleData[room.id] ? scheduleData[room.id][nextDateStr] : null);
 
                 const isPerfectSandwich = isBookedBefore && isBookedAfter;
+
+                // Lead Time rule applies ONLY to stays starting in the current calendar month
+                const isWithinPeriod = isCurrentMonth && (daysLead <= minDaysLead);
 
                 if (isWithinPeriod || isPerfectSandwich) {
                     isAvailable = true;
@@ -732,7 +779,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 } else {
                     isAvailable = false;
-                    uiLog(`Room ${room.id}: Hidden (1-Night Not In Period & Not a Perfect Sandwich)`);
+                    uiLog(`Room ${room.id}: Hidden (1-Night Policy - Future Month or Not a Perfect Sandwich)`);
                 }
             } else {
                 // All other stays: Check capacity for small groups, allow all others to see rooms for multi-booking
@@ -870,6 +917,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (availableRoomsCount === 0) {
             const isOneNightStay = datesToStay.length === 1;
+            const ciDate = datesToStay[0];
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const daysLead = Math.ceil((ciDate - today) / (1000 * 60 * 60 * 24));
+            const isCurrentMonth = ciDate.getFullYear() === today.getFullYear() && ciDate.getMonth() === today.getMonth();
+            const monthId = ciDate.getMonth() + 1;
+
+            const STATIC_POLICY = { 1: 5, 2: 5, 3: 4, 4: 7, 5: 7, 6: 5, 7: 5, 8: 5, 9: 7, 10: 7, 11: 7, 12: 5 };
+            let minDaysLead = (dynamicPolicyData && dynamicPolicyData.find(p => p.Month_ID === monthId))?.Min_Days_Lead || STATIC_POLICY[monthId] || 7;
+
+            // SPECIAL RULE: Lead Time only applies to STAYS starting in the current calendar month
+            const isWithinPeriod = isCurrentMonth && (daysLead <= minDaysLead);
+
             let msg = "Ngày mà bạn chọn đã hết phòng, xin vui lòng đổi ngày khác.";
             if (isOneNightStay && !isWithinPeriod && totalAvailableOnCheckin > 0) {
                 msg = "Chồn ưu tiên nhận đặt phòng từ 2 đêm trở lên. Với đặt phòng 1 đêm, vui lòng liên hệ với chúng tôi qua Zalo.";
@@ -946,7 +1005,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <div class="relative p-[3px] rounded-xl bg-gradient-to-b from-[#BF953F] via-[#FCF6BA] to-[#AA771C] shadow-lg shadow-black/20 group/btn active:scale-95 transition-transform duration-300">
                             <div class="p-[1px] rounded-[9px] bg-gradient-to-b from-[#AA771C] via-[#FCF6BA] to-[#BF953F]">
                                 <button data-room-id="${room.id}" onclick='openSuggestionModal("${room.id}")'
-                                    class="${isAlreadySelected ? 'bg-[#A0824B] text-white pointer-events-none' : 'bg-primary text-white'} hover:bg-[#A0824B] font-sans tracking-wider font-bold text-[15px] sm:text-[16px] py-2.5 px-8 rounded-[8px] transition-all duration-500 flex items-center justify-center leading-none uppercase w-full whitespace-nowrap">
+                                    class="${isAlreadySelected ? 'bg-[#A0824B] text-white pointer-events-none' : 'bg-primary text-white'} hover:bg-[#A0824B] font-sans tracking-wider font-bold text-[15px] sm:text-[16px] py-2.5 px-8 rounded-[8px] transition-all duration-500 flex items-center justify-center leading-none w-full whitespace-nowrap">
                                     ${isAlreadySelected ? 'Đã Chọn' : 'Đổi Ngày'}
                                 </button>
                             </div>
@@ -1047,6 +1106,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (adultCountSpan) adultCountSpan.textContent = adultCountLocal;
         if (childCountSpan) childCountSpan.textContent = childCountLocal;
 
+        const totalGuests = adultCountLocal + childCountLocal;
+        const plusAdult = document.getElementById('modal-plus-adult');
+        const plusChild = document.getElementById('modal-plus-child');
+        const curRoomId = window._currentModalRoomId;
+
+        // Only enforce 3-person limit if we are picking a SPECIFIC room
+        if (curRoomId && totalGuests >= 3) {
+            if (plusAdult) {
+                plusAdult.classList.add('opacity-50', 'pointer-events-none');
+            }
+            if (plusChild) {
+                plusChild.classList.add('opacity-50', 'pointer-events-none');
+            }
+        } else {
+            if (plusAdult) {
+                plusAdult.classList.remove('opacity-50', 'pointer-events-none');
+            }
+            if (plusChild) {
+                plusChild.classList.remove('opacity-50', 'pointer-events-none');
+            }
+        }
+
         if (modalAgeContainer) {
             const currentCount = modalAgeContainer.children.length;
             if (childCountLocal > currentCount) {
@@ -1075,69 +1156,172 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (checkinInput) { checkinInput.value = ""; checkinInput.removeAttribute('data-date'); }
         if (checkoutInput) { checkoutInput.value = ""; checkoutInput.removeAttribute('data-date'); }
-        adultCountLocal = parseInt(bookingData.adults) || 2;
-        childCountLocal = parseInt(bookingData.children) || 0;
 
-        // Reset and populate modal age container
+        // --- GUEST AUTO-FILL LOGIC (V1.28) ---
+        if (selectedRooms.length > 0) {
+            // Additional rooms mode: Auto-fill ONLY if it's the FINAL room (<= 3 people total remaining)
+            const totalSelectedAdults = selectedRooms.reduce((sum, r) => sum + (r.adults || 0), 0);
+            const totalSelectedChildren = selectedRooms.reduce((sum, r) => sum + (r.children || 0), 0);
+
+            let remA = Math.max(0, (parseInt(bookingData.adults) || 2) - totalSelectedAdults);
+            let remC = Math.max(0, (parseInt(bookingData.children) || 0) - totalSelectedChildren);
+
+            if (remA + remC <= 3) {
+                // Final room: Auto-fill remaining
+                adultCountLocal = remA;
+                childCountLocal = remC;
+            } else {
+                // Still many people left: Force manual entry
+                adultCountLocal = 0;
+                childCountLocal = 0;
+            }
+        } else if (preferredRoomId) {
+            // First suggested room: Force manual entry
+            adultCountLocal = 0;
+            childCountLocal = 0;
+        } else {
+            // General "Change Date" from header: Show current baseline defaults without any limit (V1.5)
+            adultCountLocal = parseInt(bookingData.adults) || 2;
+            childCountLocal = parseInt(bookingData.children) || 0;
+        }
+
+        // Reset and populate modal age container (V1.4)
         if (modalAgeContainer) {
             modalAgeContainer.innerHTML = '';
             const ages = (bookingData.childrenAgeCategory || "").split(',').filter(a => a);
-            updateGuestDisplay(); // Ensures UI count matches
+            updateGuestDisplay();
             const selects = modalAgeContainer.querySelectorAll('select');
             ages.forEach((age, idx) => {
                 if (selects[idx]) selects[idx].value = age;
             });
         }
 
+        const globalTitle = document.getElementById('modal-global-title');
+        const roomCalendar = document.getElementById('modal-room-calendar');
+        const roomDetails = document.getElementById('modal-room-details');
+        const dividers = document.querySelectorAll('.modal-divider');
+        const saveBtn = document.getElementById('modal-save-btn');
+        const mCheckin = document.getElementById('modal-checkin');
+        const mCheckout = document.getElementById('modal-checkout');
+
+        if (preferredRoomId) {
+            // ROOM SPECIFIC MODE (Suggestion Flow) - Custom Calendar
+            if (mCheckin) mCheckin.type = "text";
+            if (mCheckout) mCheckout.type = "text";
+            if (mCheckin) mCheckin.readOnly = true;
+            if (mCheckout) mCheckout.readOnly = true;
+
+            if (mCheckin && mCheckout && roomCalendar) {
+                const showCal = () => {
+                    if (roomCalendar.classList.contains('hidden')) {
+                        roomCalendar.classList.remove('hidden');
+                        const cMonth = checkinDate ? checkinDate.getMonth() : new Date().getMonth();
+                        const cYear = checkinDate ? checkinDate.getFullYear() : new Date().getFullYear();
+                        renderRoomMonthCalendar(preferredRoomId, cMonth, cYear);
+                    }
+                };
+                mCheckin.onclick = showCal;
+                mCheckout.onclick = showCal;
+            }
+
+            if (globalTitle) globalTitle.classList.add('hidden');
+            if (roomCalendar) roomCalendar.classList.remove('hidden');
+            dividers.forEach(d => d.classList.remove('hidden'));
+            if (saveBtn) saveBtn.textContent = 'XÁC NHẬN ĐỔI';
+            window._currentModalRoomId = preferredRoomId;
+
+            // Populate room details
+            const roomObj = localRooms.find(r => r.id === preferredRoomId);
+            if (roomObj) {
+                const roomNameEl = document.getElementById('modal-room-name');
+                const roomImgEl = document.getElementById('modal-room-image');
+                if (roomNameEl) roomNameEl.textContent = roomObj.name;
+
+                let roomImg = roomObj.img;
+                if (window.galleryData[preferredRoomId] && window.galleryData[preferredRoomId].length > 0) {
+                    const firstImg = window.galleryData[preferredRoomId][0];
+                    roomImg = typeof firstImg === 'object' ? firstImg.url : firstImg;
+                }
+                if (roomImgEl) roomImgEl.src = convertGDriveUrl(roomImg);
+
+                if (roomDetails) {
+                    roomDetails.classList.remove('hidden', 'opacity-100');
+                    roomDetails.classList.add('opacity-0');
+                    setTimeout(() => roomDetails.classList.add('opacity-100'), 50);
+                }
+
+                // Trigger initial price calculation
+                if (window.updateModalPricing) window.updateModalPricing(preferredRoomId);
+            }
+        } else {
+            // GLOBAL SEARCH MODE (Re-search Flow) - Native Picker
+            if (mCheckin) {
+                mCheckin.type = "date";
+                mCheckin.readOnly = false;
+                mCheckin.min = new Date().toISOString().split('T')[0]; // Disable past dates
+                mCheckin.value = bookingData.checkin || "";
+
+                mCheckin.onclick = () => { if (mCheckin.showPicker) mCheckin.showPicker(); };
+                mCheckin.onchange = () => {
+                    if (mCheckin.value && mCheckout) {
+                        const ciDate = new Date(mCheckin.value);
+
+                        // Set min checkout to +1 day
+                        const minDate = new Date(ciDate);
+                        minDate.setDate(minDate.getDate() + 1);
+                        mCheckout.min = minDate.toISOString().split('T')[0];
+
+                        // Auto-set checkout to +2 days as requested
+                        const coDate = new Date(ciDate);
+                        coDate.setDate(coDate.getDate() + 2);
+                        mCheckout.value = coDate.toISOString().split('T')[0];
+                    }
+                };
+            }
+            if (mCheckout) {
+                mCheckout.type = "date";
+                mCheckout.readOnly = false;
+                mCheckout.onclick = () => { if (mCheckout.showPicker) mCheckout.showPicker(); };
+                if (mCheckin && mCheckin.value) {
+                    const ciDate = new Date(mCheckin.value);
+                    const minDate = new Date(ciDate);
+                    minDate.setDate(minDate.getDate() + 1);
+                    mCheckout.min = minDate.toISOString().split('T')[0];
+                } else {
+                    mCheckout.min = new Date().toISOString().split('T')[0];
+                }
+                mCheckout.value = bookingData.checkout || "";
+            }
+
+            if (globalTitle) globalTitle.classList.remove('hidden');
+            if (roomCalendar) {
+                roomCalendar.classList.add('hidden');
+                roomCalendar.innerHTML = ''; // Clear custom calendar
+            }
+            if (roomDetails) roomDetails.classList.add('hidden');
+            dividers.forEach(d => d.classList.add('hidden'));
+            if (saveBtn) saveBtn.textContent = 'ĐỔI NGÀY';
+            window._currentModalRoomId = null;
+        }
+
         updateGuestDisplay();
         if (modal) {
             modal.classList.remove('hidden');
             modal.classList.add('flex');
-            document.body.style.overflow = 'hidden'; // Lock scroll
+            document.body.style.overflow = 'hidden';
             void modal.offsetWidth;
             modal.classList.remove('opacity-0');
-            if (modalContent) modalContent.classList.remove('translate-y-full');
-        }
-
-        // --- CALENDAR & ROOM INFO ---
-        const targetRoomId = preferredRoomId || (selectedRooms.length > 0 ? selectedRooms[0].id : null);
-        window._currentModalRoomId = targetRoomId; // Track for pricing updates
-
-        const roomDetailsContainer = document.getElementById('modal-room-details');
-        const roomNameEl = document.getElementById('modal-room-name');
-        const roomImgEl = document.getElementById('modal-room-image');
-
-        if (targetRoomId && roomDetailsContainer && roomNameEl && roomImgEl) {
-            const roomObj = localRooms.find(r => r.id === targetRoomId);
-            if (roomObj) {
-                roomNameEl.textContent = roomObj.name;
-                
-                // --- ROBUST IMAGE LOOKUP ---
-                // Try: 1. galleryData[id], 2. galleryData[Pink_Room], 3. roomObj.img
-                let rKey = targetRoomId;
-                let roomImg = roomObj.img;
-                if (window.galleryData[rKey] && window.galleryData[rKey].length > 0) {
-                    roomImg = window.galleryData[rKey][0].url;
-                }
-                roomImgEl.src = convertGDriveUrl(roomImg);
-                
-                roomDetailsContainer.classList.remove('hidden');
-                setTimeout(() => roomDetailsContainer.classList.add('opacity-100'), 50);
-                
-                // Trigger initial price calculation
-                if (window.updateModalPricing) window.updateModalPricing(targetRoomId);
-            } else {
-                roomDetailsContainer.classList.add('hidden');
-                roomDetailsContainer.classList.remove('opacity-100');
+            if (modalContent) {
+                modalContent.classList.remove('translate-y-full');
+                modalContent.classList.add('scale-100'); // Centered popup entrance
             }
-        } else if (roomDetailsContainer) {
-            roomDetailsContainer.classList.add('hidden');
-            roomDetailsContainer.classList.remove('opacity-100');
         }
 
         const startMonth = checkinDate ? checkinDate.getMonth() : new Date().getMonth();
         const startYear = checkinDate ? checkinDate.getFullYear() : new Date().getFullYear();
-        renderRoomMonthCalendar(targetRoomId, startMonth, startYear);
+        if (preferredRoomId) {
+            renderRoomMonthCalendar(preferredRoomId, startMonth, startYear);
+        }
     };
     window.openModal = openModal;
 
@@ -1156,7 +1340,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Get check-in/out inputs for dataset values (native picker disabled)
         const ciInput = document.getElementById('modal-checkin');
         const coInput = document.getElementById('modal-checkout');
-        
+
         // Native picker disabled, min not needed for type="text" readonly
         // if (ciInput) ciInput.min = getStr(today);
 
@@ -1233,7 +1417,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     let tempCI = new Date(currentCI);
                     let tempLastStay = new Date(dateStr);
                     let canSelect = true;
-                    
+
                     if (rId) {
                         let scan = new Date(tempCI);
                         while (scan <= tempLastStay) {
@@ -1243,7 +1427,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             scan.setDate(scan.getDate() + 1);
                         }
                     }
-                    
+
                     if (canSelect) {
                         checkout.value = formatDisplayDate(getNextDayStr(dateStr));
                         checkout.setAttribute('data-date', getNextDayStr(dateStr));
@@ -1255,9 +1439,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
 
-                if (window.updateBookingSummaryLabels) {
-                    window.updateBookingSummaryLabels(checkin.dataset.date || "", checkout.dataset.date || "");
-                }
+                // Header update removed to preserve baseline dates (V1.28)
+                // if (window.updateBookingSummaryLabels) {
+                //     window.updateBookingSummaryLabels(checkin.dataset.date || "", checkout.dataset.date || "");
+                // }
 
                 if (!window._isSyncingFromNative) {
                     try {
@@ -1317,7 +1502,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const nightPrice = isWe ? (roomDayData.weekend || 1000000) : (roomDayData.weekday || 800000);
                 totalBase += nightPrice;
                 avgSurcharge = roomDayData.surcharge || 450000;
-                
+
                 listHtml += `
                     <div class="flex justify-between items-center text-slate-600">
                         <span>Đêm ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}</span>
@@ -1333,7 +1518,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             list.innerHTML = listHtml;
-            totalEl.textContent = renderCurrency(totalBase + totalSurcharge) + "đ";
+            const finalTotal = totalBase + totalSurcharge;
+            totalEl.textContent = renderCurrency(finalTotal) + "đ / " + stayDates.length + " Đêm";
 
             if (totalSurcharge > 0) {
                 surchargeRow.classList.remove('hidden');
@@ -1379,7 +1565,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             const ciVal = ciInput.dataset.date || "";
             const coVal = coInput.dataset.date || "";
             const ciTime = ciVal ? parseLocal(ciVal).getTime() : null;
-            
+            const coTime = coVal ? parseLocal(coVal).getTime() : null;
+
             // Calculate the last NIGHT the guest stays (1 day before Check-out)
             // Use parseLocal to ensure time (00:00:00) matches perfectly with current 'd'
             let lastStayNightTime = null;
@@ -1390,6 +1577,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             let isCI = ciTime && d.getTime() === ciTime;
+            let isCO = coTime && d.getTime() === coTime;
             let isLastNight = lastStayNightTime && d.getTime() === lastStayNightTime;
             let isInRange = ciTime && lastStayNightTime && d.getTime() > ciTime && d.getTime() < lastStayNightTime;
 
@@ -1507,9 +1695,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     const plusChild = document.getElementById('modal-plus-child');
 
     if (minusAdult) minusAdult.addEventListener('click', () => { if (adultCountLocal > 1) { adultCountLocal--; updateGuestDisplay(); if (window.updateModalPricing) window.updateModalPricing(window._currentModalRoomId); } });
-    if (plusAdult) plusAdult.addEventListener('click', () => { adultCountLocal++; updateGuestDisplay(); if (window.updateModalPricing) window.updateModalPricing(window._currentModalRoomId); });
+    if (plusAdult) plusAdult.addEventListener('click', () => {
+        const curRoomId = window._currentModalRoomId;
+        if (!curRoomId || (adultCountLocal + childCountLocal < 3)) {
+            adultCountLocal++;
+            updateGuestDisplay();
+            if (window.updateModalPricing) window.updateModalPricing(curRoomId);
+        } else {
+            alert("Mỗi phòng tối đa 3 khách. Nếu đi đông hơn vui lòng chọn thêm phòng.");
+        }
+    });
     if (minusChild) minusChild.addEventListener('click', () => { if (childCountLocal > 0) { childCountLocal--; updateGuestDisplay(); if (window.updateModalPricing) window.updateModalPricing(window._currentModalRoomId); } });
-    if (plusChild) plusChild.addEventListener('click', () => { childCountLocal++; updateGuestDisplay(); if (window.updateModalPricing) window.updateModalPricing(window._currentModalRoomId); });
+    if (plusChild) plusChild.addEventListener('click', () => {
+        const curRoomId = window._currentModalRoomId;
+        if (!curRoomId || (adultCountLocal + childCountLocal < 3)) {
+            childCountLocal++;
+            updateGuestDisplay();
+            if (window.updateModalPricing) window.updateModalPricing(curRoomId);
+        } else {
+            alert("Mỗi phòng tối đa 3 khách. Nếu đi đông hơn vui lòng chọn thêm phòng.");
+        }
+    });
 
     const closeModalBtn = document.getElementById('close-modal-btn');
     if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
@@ -1519,12 +1725,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     window.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
 
-    const triggerModalWarningEffect = (msg) => {
+    const triggerModalWarningEffect = (msg, isCritical = false) => {
         const warning = document.getElementById('modal-booking-warning');
         if (!warning) return;
         if (msg) warning.textContent = msg;
 
         warning.classList.add('active');
+        if (isCritical) {
+            warning.classList.remove('text-[#8B4513]');
+            warning.classList.add('text-red-600', 'scale-110');
+        } else {
+            warning.classList.add('text-[#8B4513]');
+            warning.classList.remove('text-red-600', 'scale-110');
+        }
 
         // Force restart animation on every click
         warning.style.animation = 'none';
@@ -1534,13 +1747,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         warning.classList.remove('animate-shake', 'animate-pop');
         void warning.offsetWidth;
         warning.classList.add('animate-shake', 'animate-pop');
+
+        if (isCritical) {
+            setTimeout(() => {
+                warning.classList.remove('scale-110');
+            }, 500);
+        }
     };
 
     const saveBtn = document.getElementById('modal-save-btn');
     if (saveBtn) {
         saveBtn.addEventListener('click', async () => {
-            const ci = checkinInput ? (checkinInput.dataset.date || "") : '';
-            const co = checkoutInput ? (checkoutInput.dataset.date || "") : '';
+            const rId = window._currentModalRoomId;
+            const modalImg = document.getElementById('modal-room-image');
+            const modalContent = document.getElementById('edit-booking-content');
+            const modalAgeContainer = document.getElementById('modal-children-ages-container');
+
+            // 0. Guest Count Validation (Force selection)
+            if (adultCountLocal + childCountLocal === 0) {
+                triggerModalWarningEffect("Xin xác nhận số người lớn và trẻ em ở trong phòng này.", true);
+                return;
+            }
+
+            const ciInput = document.getElementById('modal-checkin');
+            const coInput = document.getElementById('modal-checkout');
+            const ci = ciInput ? (ciInput.type === 'date' ? ciInput.value : ciInput.dataset.date || "") : '';
+            const co = coInput ? (coInput.type === 'date' ? coInput.value : coInput.dataset.date || "") : '';
             if (!ci || !co) { alert("Vui lòng chọn ngày nhận và trả phòng"); return; }
             const ciDate = parseLocal(ci);
             const coDate = parseLocal(co);
@@ -1552,56 +1784,46 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             // 1-NIGHT POLICY SYNC (Modal Edition - OPTIMIZED v11.18)
-            if (diffDays === 1) {
+            // 1-NIGHT POLICY SYNC (Modal Edition - ROOM-SPECIFIC v11.20)
+            if (rId && diffDays === 1) {
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
+                const isCurrentMonth = ciDate.getFullYear() === today.getFullYear() && ciDate.getMonth() === today.getMonth();
+
                 const daysLead = Math.ceil((ciDate - today) / (1000 * 60 * 60 * 24));
                 const monthId = ciDate.getMonth() + 1;
 
-                // 1. Check Policy from memory (synced at page load)
+                const STATIC_POLICY = { 1: 5, 2: 5, 3: 4, 4: 7, 5: 7, 6: 5, 7: 5, 8: 5, 9: 7, 10: 7, 11: 7, 12: 5 };
                 const mPolicy = (dynamicPolicyData || []).find(p => p.Month_ID === monthId);
-                const minDaysLead = (mPolicy && mPolicy.Min_Days_Lead !== null) ? mPolicy.Min_Days_Lead : 7;
+                const minDaysLead = (mPolicy && mPolicy.Min_Days_Lead !== null) ? mPolicy.Min_Days_Lead : (STATIC_POLICY[monthId] || 7);
 
-                if (daysLead > minDaysLead) {
-                    // 2. Check Triple-Gap from memory (Booked-Available-Booked)
+                // Lead Time rule applies ONLY to current calendar month
+                const isWithinPeriod = isCurrentMonth && (daysLead <= minDaysLead);
+
+                if (!isWithinPeriod) {
                     const getStrLocal = d => {
                         const yy = d.getFullYear();
                         const mm = String(d.getMonth() + 1).padStart(2, '0');
                         const dd = String(d.getDate()).padStart(2, '0');
                         return `${yy}-${mm}-${dd}`;
                     };
-
                     const ciStr = getStrLocal(ciDate);
                     const coStr = getStrLocal(coDate);
-
                     const prDate = new Date(ciDate);
                     prDate.setDate(prDate.getDate() - 1);
                     const prStr = getStrLocal(prDate);
 
-                    let hasAvailableRoomsOnCheckin = false;
-                    let hasValidTripleGap = false;
+                    const statusPr = scheduleData[rId] ? scheduleData[rId][prStr] : null;
+                    const statusCo = scheduleData[rId] ? scheduleData[rId][coStr] : null;
 
-                    Object.keys(scheduleData).forEach(roomId => {
-                        const statusCi = scheduleData[roomId][ciStr];
-                        const statusCo = scheduleData[roomId][coStr];
-                        const statusPr = scheduleData[roomId][prStr];
+                    const isPerfectSandwich = isBooked(statusPr) && isBooked(statusCo);
 
-                        if (!isBooked(statusCi)) {
-                            hasAvailableRoomsOnCheckin = true;
-                            // SHOWN if BOTH before and after are booked
-                            if (isBooked(statusPr) && isBooked(statusCo)) {
-                                hasValidTripleGap = true;
-                            }
-                        }
-                    });
-
-                    if (hasAvailableRoomsOnCheckin && !hasValidTripleGap) {
+                    if (!isPerfectSandwich) {
                         triggerModalWarningEffect("Chồn ưu tiên nhận đặt phòng từ 2 đêm. Với đặt phòng 1 đêm, vui lòng liên hệ Zalo.");
                         return; // BLOCK submission
                     }
                 }
             }
-
 
             // 3. Child Age Validation (Sync with index.html)
             const modalAgeSelectors = modalAgeContainer.querySelectorAll('select');
@@ -1610,20 +1832,204 @@ document.addEventListener('DOMContentLoaded', async () => {
                 alert("Vui lòng chọn đầy đủ độ tuổi của trẻ em.");
                 return;
             }
-
             const childrenAgeStr = modalChildrenAges.join(',');
 
+            // --- MULTI-ROOM & STITCHING VALIDATION (v11.23) ---
+            if (rId && selectedRooms.length > 0) {
+                const firstRoom = selectedRooms[0];
+                const fCI = firstRoom.checkin;
+                const fCO = firstRoom.checkout;
 
+                // 1. Target Range Boundary: Modal dates must be within or equal to the first room's trip
+                if (ci < fCI || co > fCO) {
+                    triggerModalWarningEffect("Xin vui lòng liên hệ zalo để được hỗ trợ ghép phòng.", true);
+                    return;
+                }
 
-            sessionStorage.setItem('chonVillageBooking', JSON.stringify({
-                ...bookingData,
-                checkin: ci,
-                checkout: co,
-                adults: adultCountLocal,
-                children: childCountLocal,
-                childrenAgeCategory: childrenAgeStr
-            }));
-            window.location.reload();
+                // 2. Policy Re-check for Partial Stays (Stitching)
+                if (diffDays === 1) {
+                    const today = new Date(); today.setHours(0, 0, 0, 0);
+                    const isCurrentMonth = ciDate.getFullYear() === today.getFullYear() && ciDate.getMonth() === today.getMonth();
+                    const daysLead = Math.ceil((ciDate - today) / (1000 * 60 * 60 * 24));
+                    const monthId = ciDate.getMonth() + 1;
+                    const policy = dynamicPolicyData.find(p => p.Month_ID === monthId);
+                    const minLead = policy ? policy.Min_Days_Lead : 4;
+
+                    const prevD = new Date(ciDate); prevD.setDate(prevD.getDate() - 1);
+                    const nextD = new Date(ciDate); nextD.setDate(nextD.getDate() + 1);
+                    const prevBooked = isBooked(scheduleData[rId] ? scheduleData[rId][getStr(prevD)] : null);
+                    const nextBooked = isBooked(scheduleData[rId] ? scheduleData[rId][getStr(nextD)] : null);
+                    const isPerfectGap = prevBooked && nextBooked;
+
+                    let isAllowed = false;
+                    if (isCurrentMonth && daysLead <= minLead) isAllowed = true;
+                    if (isPerfectGap) isAllowed = true;
+
+                    if (!isAllowed) {
+                        triggerModalWarningEffect("Xin vui lòng liên hệ zalo để được hỗ trợ ghép phòng.", true);
+                        return;
+                    }
+                }
+            }
+
+            if (rId) {
+                // --- GREEN ROOM RESTRICTION (v11.22) ---
+                const isUnder6Local = modalChildrenAges.some(age => age && parseInt(age) > 0 && parseInt(age) < 6);
+                if (isUnder6Local && adults === 2 && rId !== 'Green_Room') {
+                    triggerModalWarningEffect("Phòng bạn chọn chưa hỗ trợ trẻ dưới 6 tuổi, Xin vui lòng liên hệ zalo để được hỗ trợ thêm", true);
+                    return; // BLOCK submission
+                }
+            }
+
+            // --- CASE 1: GLOBAL SEARCH CHANGE (Like index.html) ---
+            if (!rId) {
+                bookingData.checkin = ci;
+                bookingData.checkout = co;
+                bookingData.adults = adultCountLocal;
+                bookingData.children = childCountLocal;
+                bookingData.childrenAgeCategory = childrenAgeStr;
+                sessionStorage.setItem('chonVillageBooking', JSON.stringify(bookingData));
+                
+                selectedRooms.length = 0; // Clear previous selections
+                window.location.reload(); // Refresh entire state from storage
+                return;
+            }
+
+            // --- CASE 2: ROOM-SPECIFIC AVAILABILITY CHANGE ---
+            if (rId) {
+                // 1-NIGHT POLICY (Specific Room)
+                if (diffDays === 1) {
+                    const today = new Date(); today.setHours(0, 0, 0, 0);
+                    const isCurrentMonth = ciDate.getFullYear() === today.getFullYear() && ciDate.getMonth() === today.getMonth();
+                    const daysLead = Math.ceil((ciDate - today) / (1000 * 60 * 60 * 24));
+                    const monthId = ciDate.getMonth() + 1;
+                    const mPolicy = (dynamicPolicyData || []).find(p => p.Month_ID === monthId);
+                    const minDaysLead = (mPolicy && mPolicy.Min_Days_Lead !== null) ? mPolicy.Min_Days_Lead : 7;
+
+                    if (!(isCurrentMonth && daysLead <= minDaysLead)) {
+                        const prDate = new Date(ciDate); prDate.setDate(prDate.getDate() - 1);
+                        const statusPr = scheduleData[rId]?.[getStr(prDate)];
+                        const statusCo = scheduleData[rId]?.[co];
+                        if (!(isBooked(statusPr) && isBooked(statusCo))) {
+                            triggerModalWarningEffect("Chồn ưu tiên nhận đặt phòng từ 2 đêm. Với đặt phòng 1 đêm, vui lòng liên hệ Zalo.");
+                            return;
+                        }
+                    }
+                }
+
+                // MULTI-ROOM / STITCHING
+                if (selectedRooms.length > 0) {
+                    const firstRoom = selectedRooms[0];
+                    if (ci < firstRoom.checkin || co > firstRoom.checkout) {
+                        triggerModalWarningEffect("Xin vui lòng liên hệ zalo để được hỗ trợ ghép phòng.", true);
+                        return;
+                    }
+                }
+
+                // GREEN ROOM
+                const isUnder6 = modalChildrenAges.some(age => age && parseInt(age) > 0 && parseInt(age) < 6);
+                if (isUnder6 && adultCountLocal === 2 && rId !== 'Green_Room') {
+                    triggerModalWarningEffect("Phòng chọn chưa hỗ trợ trẻ dưới 6 tuổi, vui lòng liên hệ Zalo.", true);
+                    return;
+                }
+
+                // SUCCESS: Update Selection
+                const roomObj = localRooms.find(r => r.id === rId);
+                if (!roomObj) return;
+
+                let totalRoomPrice = 0;
+                let currPriceDate = new Date(ciDate);
+                while (currPriceDate < coDate) {
+                    const dStr = getStr(currPriceDate);
+                    const rData = pricingData[rId]?.[dStr] || pricingData[rId]?.['default'] || {};
+                    const nightP = (currPriceDate.getDay() === 5 || currPriceDate.getDay() === 6 || currPriceDate.getDay() === 0) ? (rData.weekend || 1000000) : (rData.weekday || 800000);
+                    totalRoomPrice += nightP;
+                    currPriceDate.setDate(currPriceDate.getDate() + 1);
+                }
+                if (adultCountLocal > 2) {
+                    const surchargePrice = pricingData[rId]?.['default']?.surcharge || 450000;
+                    totalRoomPrice += (adultCountLocal - 2) * surchargePrice * diffDays;
+                }
+
+                const selectionData = {
+                    ...roomObj,
+                    img: modalImg ? modalImg.src : roomObj.img,
+                    checkin: ci, checkout: co,
+                    adults: adultCountLocal, children: childCountLocal,
+                    childrenAgeCategory: childrenAgeStr,
+                    totalPrice: totalRoomPrice, nights: diffDays
+                };
+
+                const existingIdx = selectedRooms.findIndex(r => r.id === rId);
+                if (existingIdx !== -1) selectedRooms[existingIdx] = selectionData;
+                else selectedRooms.push(selectionData);
+
+                if (window.updateBookingSummaryLabels) window.updateBookingSummaryLabels(ci, co);
+                if (window.closeModal) window.closeModal();
+            }
+
+            const updatedGuestLabel = (bookingData.adults > 0 && bookingData.children > 0)
+                ? `${bookingData.adults} NL, ${bookingData.children} TE`
+                : `${bookingData.adults} Người lớn`;
+
+            const summaryGuestsEl = document.getElementById('summary-guests');
+            const miniSummaryGuestsEl = document.getElementById('mini-summary-guests');
+            if (summaryGuestsEl) summaryGuestsEl.textContent = updatedGuestLabel;
+            if (miniSummaryGuestsEl) miniSummaryGuestsEl.textContent = updatedGuestLabel;
+
+            if (window.updateBookingSummaryLabels) {
+                window.updateBookingSummaryLabels(ci, co);
+            }
+
+            // 1. Shrink Modal Content (Initial feedback)
+            if (modalContent) {
+                modalContent.style.transition = 'transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.5s ease';
+                modalContent.style.transform = 'scale(0.9) translateY(20px)';
+                modalContent.style.pointerEvents = 'none'; // Prevent double clicks
+            }
+
+            // 2. Add to Waitlist & Render (Update if already exists, else push)
+            const existingIdx = selectedRooms.findIndex(r => String(r.id) === String(rId));
+            if (existingIdx !== -1) {
+                selectedRooms[existingIdx] = selectionData;
+            } else {
+                selectedRooms.push(selectionData);
+            }
+            renderWaitlist();
+
+            // 3. Fly the image and shrink the board towards the target
+            const targetItem = document.getElementById(`waitlist-item-${rId}`);
+            if (modalImg && targetItem && modalContent) {
+                uiLog("Animation starting: modal -> " + rId);
+                targetItem.style.opacity = '0';
+
+                // Animate the WHOLE modal content shrinking towards the target
+                const modalRect = modalContent.getBoundingClientRect();
+                const targetRect = targetItem.getBoundingClientRect();
+                const deltaX = (targetRect.left + targetRect.width / 2) - (modalRect.left + modalRect.width / 2);
+                const deltaY = (targetRect.top + targetRect.height / 2) - (modalRect.top + modalRect.height / 2);
+
+                modalContent.style.transition = 'transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.5s ease';
+                modalContent.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0.1)`;
+                modalContent.style.opacity = '0';
+
+                animateFly(modalImg, targetItem, modalImg.src, () => {
+                    targetItem.style.opacity = '1';
+                    closeModal();
+                    // Reset modal transform for next opening
+                    setTimeout(() => {
+                        if (modalContent) {
+                            modalContent.style.transform = '';
+                            modalContent.style.opacity = '';
+                            modalContent.style.transition = '';
+                            modalContent.style.pointerEvents = '';
+                        }
+                    }, 100);
+                });
+            } else {
+                uiLog("Missing animation targets, closing directly.");
+                closeModal();
+            }
         });
     }
 
@@ -1673,7 +2079,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (selectedRooms.length === 0) return;
 
             // --- CAPACITY VALIDATION (Total Guests: Adults + Children) ---
-            const totalGuestsCount = (typeof adults !== 'undefined' ? adults : 2) + (typeof children !== 'undefined' ? children : 0);
+            // Re-fetch current counts from our synced local variables
+            const totalGuestsCount = adults + children;
             const totalCapacity = selectedRooms.length * 3; // Max 3 guests total per room
             const warningEl = document.getElementById('waitlist-booking-warning');
 
@@ -1731,6 +2138,8 @@ let selectedRooms = [];
 function renderWaitlist() {
     const container = document.getElementById('waitlist-items');
     const footer = document.getElementById('waitlist-footer');
+    const countEl = document.getElementById('waitlist-count');
+    const totalEl = document.getElementById('waitlist-total');
     if (!container || !footer) return;
 
     // 1. Đồng bộ trạng thái các nút trên danh sách phòng
@@ -1754,24 +2163,30 @@ function renderWaitlist() {
 
     if (selectedRooms.length === 0) {
         footer.classList.add('translate-y-full');
-        if (contactContainer) contactContainer.style.bottom = '128px'; // bottom-32
+        if (contactContainer) contactContainer.style.bottom = '128px';
         return;
     }
 
     footer.classList.remove('translate-y-full');
-    if (contactContainer) contactContainer.style.bottom = '240px'; // Higher to avoid all overlaps
+    if (contactContainer) contactContainer.style.bottom = '240px';
 
-    container.innerHTML = selectedRooms.map((room, index) => `
-        <div id="waitlist-item-${room.id}" class="relative group/item shrink-0 transition-opacity duration-300">
-            <div class="w-12 h-12 rounded-lg overflow-hidden border-2 border-primary shadow-sm bg-white">
-                <img src="${room.img}" class="w-full h-full object-cover">
+    if (countEl) countEl.textContent = selectedRooms.length;
+
+    container.innerHTML = selectedRooms.map((room, index) => {
+        // Correct identification for animation
+        const rId = room.id;
+        return `
+            <div id="waitlist-item-${rId}" class="relative group/item shrink-0 transition-opacity duration-300">
+                <div class="w-11 h-11 rounded-lg overflow-hidden border border-primary shadow-sm bg-white">
+                    <img src="${room.img}" class="w-full h-full object-cover">
+                </div>
+                <!-- Nút X để xóa phòng -->
+                <button onclick="removeFromWaitlist(${index})" class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full size-[18px] flex items-center justify-center shadow-lg active:scale-95 transition-all z-10 border border-white">
+                    <span class="material-symbols-outlined text-[10px] font-bold">close</span>
+                </button>
             </div>
-            <!-- Nút X để xóa phòng -->
-            <button onclick="removeFromWaitlist(${index})" class="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full size-5 flex items-center justify-center shadow-md active:scale-90 transition-transform z-10">
-                <span class="material-symbols-outlined text-[12px] font-bold">close</span>
-            </button>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 // Hàm xóa phòng khỏi danh sách
@@ -2363,7 +2778,7 @@ function closeGallery(isPopState = false) {
             history.back();
         }
         modal.classList.remove('active');
-        
+
         // ONLY unlock scroll if booking modal is hidden
         if (!bookingModal || bookingModal.classList.contains('hidden')) {
             document.body.style.overflow = '';

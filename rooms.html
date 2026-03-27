@@ -103,6 +103,23 @@
             animation: slideUpElastic 1s cubic-bezier(0.25, 1, 0.5, 1) forwards;
         }
 
+        /* Hide native calendar icon but keep it functional and expanded */
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            opacity: 0;
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+            display: block;
+            z-index: 10;
+        }
+
+        input[type="date"] {
+            position: relative;
+        }
+
         /* Shake and Pop animations for notifications */
         @keyframes shake {
 
@@ -402,16 +419,16 @@
 
     <!-- Edit Booking Modal -->
     <div id="edit-booking-modal"
-        class="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm hidden flex-col justify-start items-center opacity-0 transition-opacity duration-300 p-0 sm:p-4"
+        class="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm hidden flex-col justify-center items-center opacity-0 transition-opacity duration-300 p-4"
         style="overscroll-behavior: none;">
-        <div class="bg-[#FFFFF5] rounded-t-2xl sm:rounded-sm p-1 w-full max-w-md transform translate-y-full sm:translate-y-0 transition-transform duration-300 relative h-[100dvh] max-h-screen flex flex-col scrollbar-hide"
-            id="edit-booking-content">
+        <div class="bg-[#FFFFF5] rounded-2xl p-1 w-full max-w-[380px] transform transition-all duration-300 relative h-auto max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden"
+            id="edit-booking-content" style="border: 1px solid #c8a96a33;">
             <!-- Close Button moved inside -->
             <button id="close-modal-btn"
                 class="absolute top-2 right-2 p-1.5 text-graphite/40 hover:text-primary transition-colors z-[100]">
                 <span class="material-symbols-outlined text-xl">close</span>
             </button>
-            <div class="rococo-border bg-[#FFFFF5] pt-1 px-3 pb-3 flex flex-col items-center h-full">
+            <div class="rococo-border bg-[#FFFFF5] pt-1 px-3 pb-5 flex flex-col items-center h-full">
                 <!-- Acanthus Leaf Corners -->
                 <div class="acanthus-corner top-0 left-0">
                     <svg fill="currentColor" viewbox="0 0 100 100">
@@ -434,42 +451,51 @@
                     </svg>
                 </div>
 
+                <!-- Modal Title (Only visible for Global mode) -->
+                <h2 id="modal-global-title" class="hidden text-xl font-serif text-graphite text-center uppercase tracking-[0.2em] mb-5 mt-4">
+                    THAY ĐỔI NGÀY
+                </h2>
+
                 <!-- Scrollable Content Area -->
-                <div class="w-full flex-1 overflow-y-auto scrollbar-hide px-1 pb-8">
+                <div class="w-full flex-1 overflow-y-auto scrollbar-hide px-1 pb-4">
                     <!-- Room Specific Calendar Container -->
                     <div id="modal-room-calendar" class="hidden w-full mb-1 overflow-x-auto pb-1 scrollbar-hide">
                         <!-- Calendar will be injected here -->
                     </div>
 
-                    <div class="w-full space-y-1">
+                    <div class="w-full space-y-3">
                         <!-- Dates -->
                         <div class="grid grid-cols-2 gap-3">
                             <div class="flex flex-col">
-                                <label class="text-[9px] uppercase tracking-widest text-[#c8a96a] font-bold mb-0.5">Nhận
+                                <label class="text-[10px] uppercase tracking-widest text-[#c8a96a] font-bold mb-1">Nhận
                                     phòng</label>
                                 <div
-                                    class="border border-[#c8a96a]/30 p-1 flex justify-between items-center bg-transparent h-8">
+                                    class="border border-[#c8a96a]/30 flex justify-between items-center bg-transparent h-10 relative cursor-pointer"
+                                    onclick="this.querySelector('input').showPicker && this.querySelector('input').showPicker()">
                                     <input id="modal-checkin"
-                                        class="bg-transparent border-none focus:ring-0 text-graphite text-sm p-0 rounded-none outline-none w-full cursor-default"
+                                        class="bg-transparent border-none focus:ring-0 text-graphite text-xs px-3 rounded-none outline-none w-full h-full cursor-pointer font-bold"
                                         type="text" readonly placeholder="dd/mm/yyyy" />
+                                    <span class="material-symbols-outlined text-[#c8a96a] text-lg pointer-events-none absolute right-2">calendar_month</span>
                                 </div>
                             </div>
                             <div class="flex flex-col">
-                                <label class="text-[9px] uppercase tracking-widest text-[#c8a96a] font-bold mb-0.5">Trả
+                                <label class="text-[10px] uppercase tracking-widest text-[#c8a96a] font-bold mb-1">Trả
                                     phòng</label>
                                 <div
-                                    class="border border-[#c8a96a]/30 p-1 flex justify-between items-center bg-transparent h-8">
+                                    class="border border-[#c8a96a]/30 flex justify-between items-center bg-transparent h-10 relative cursor-pointer"
+                                    onclick="this.querySelector('input').showPicker && this.querySelector('input').showPicker()">
                                     <input id="modal-checkout"
-                                        class="bg-transparent border-none focus:ring-0 text-graphite text-sm p-0 rounded-none outline-none w-full cursor-default"
+                                        class="bg-transparent border-none focus:ring-0 text-graphite text-xs px-3 rounded-none outline-none w-full h-full cursor-pointer font-bold"
                                         type="text" readonly placeholder="dd/mm/yyyy" />
+                                    <span class="material-symbols-outlined text-[#c8a96a] text-lg pointer-events-none absolute right-2">calendar_month</span>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Content Section: Room Info (Top) -> Divider -> Guests (Bottom) -->
-                        <div class="space-y-1 pt-1">
+                        <div class="space-y-3 pt-2">
                             <!-- Decorative Divider -->
-                            <div class="diamond-divider">
+                            <div class="diamond-divider modal-divider">
                                 <div class="diamond-line"></div>
                                 <div class="diamond-square"></div>
                                 <div class="diamond-line"></div>
@@ -498,7 +524,7 @@
                                             <span id="modal-surcharge-price">0đ</span>
                                         </div>
                                         <div class="flex justify-between items-center font-bold text-[12px] text-graphite">
-                                            <span class="font-serif text-[10px] uppercase tracking-tighter">TỔNG CỘNG:</span>
+                                            <span id="modal-total-label" class="font-serif text-[10px] uppercase tracking-tighter">TỔNG:</span>
                                             <span id="modal-total-price" class="text-primary">0đ</span>
                                         </div>
                                     </div>
@@ -506,42 +532,40 @@
                             </div>
 
                             <!-- Decorative Divider (Stays in Middle) -->
-                            <div class="diamond-divider">
+                            <div class="diamond-divider modal-divider">
                                 <div class="diamond-line"></div>
                                 <div class="diamond-square"></div>
                                 <div class="diamond-line"></div>
                             </div>
 
-                            <!-- Guests Section (Now at Bottom) -->
-                            <!-- Người Lớn Row -->
+                            <!-- Guests Section -->
                             <div class="flex items-center justify-between border-b border-[#c8a96a]/10 pb-2">
-                                <span class="text-[10px] font-serif text-graphite uppercase tracking-widest">Người Lớn</span>
-                                <div class="flex items-center gap-2">
+                                <span class="text-[11px] font-serif text-graphite uppercase tracking-[0.15em] font-bold">Người Lớn</span>
+                                <div class="flex items-center gap-3">
                                     <button id="modal-minus-adult"
-                                        class="size-5 rounded-full border border-[#c8a96a] text-[#c8a96a] flex items-center justify-center text-[10px]"
-                                        type="button">-</button>
-                                    <span id="modal-adult-count" class="text-graphite font-bold w-3 text-center text-sm">2</span>
+                                        class="size-7 rounded-full border border-[#c8a96a] text-[#c8a96a] flex items-center justify-center text-sm transition-all active:scale-95"
+                                        type="button">−</button>
+                                    <span id="modal-adult-count" class="text-graphite font-bold w-4 text-center text-lg">2</span>
                                     <button id="modal-plus-adult"
-                                        class="size-5 rounded-full bg-[#c8a96a] text-white flex items-center justify-center text-[10px]"
+                                        class="size-7 rounded-full bg-[#c8a96a] text-white flex items-center justify-center text-sm shadow-md transition-all active:scale-95"
                                         type="button">+</button>
                                 </div>
                             </div>
 
-                            <!-- Trẻ Em Row -->
-                            <div class="flex items-center justify-between border-b border-[#c8a96a]/10 pb-1">
+                            <div class="flex items-center justify-between border-b border-[#c8a96a]/10 pb-2">
                                 <div class="flex flex-col">
-                                    <span class="text-[10px] font-display text-graphite uppercase">Trẻ Em</span>
-                                    <div id="modal-children-ages-container" class="flex flex-wrap gap-1 mt-0.5">
-                                        <!-- Dynamic child age selects will appear here -->
+                                    <span class="text-[11px] font-serif text-graphite uppercase tracking-[0.15em] font-bold">Trẻ Em</span>
+                                    <div id="modal-children-ages-container" class="flex flex-wrap gap-1 mt-1">
+                                        <!-- Ages here -->
                                     </div>
                                 </div>
-                                <div class="flex items-center gap-2">
+                                <div class="flex items-center gap-3">
                                     <button id="modal-minus-child"
-                                        class="size-5 rounded-full border border-[#c8a96a] text-[#c8a96a] flex items-center justify-center text-[10px]"
-                                        type="button">-</button>
-                                    <span id="modal-child-count" class="text-graphite font-bold w-3 text-center text-sm">0</span>
+                                        class="size-7 rounded-full border border-[#c8a96a] text-[#c8a96a] flex items-center justify-center text-sm transition-all active:scale-95"
+                                        type="button">−</button>
+                                    <span id="modal-child-count" class="text-graphite font-bold w-4 text-center text-lg">0</span>
                                     <button id="modal-plus-child"
-                                        class="size-5 rounded-full bg-[#c8a96a] text-white flex items-center justify-center text-[10px]"
+                                        class="size-7 rounded-full bg-[#c8a96a] text-white flex items-center justify-center text-sm shadow-md transition-all active:scale-95"
                                         type="button">+</button>
                                 </div>
                             </div>
@@ -549,13 +573,13 @@
                     </div>
                 </div>
 
-                <div class="w-full mt-0 pt-0 relative pb-1 shrink-0">
+                <div class="w-full mt-2 pt-1 relative pb-2 shrink-0">
                     <button id="modal-save-btn"
-                        class="w-full bg-[#c8a96a] hover:bg-gradient-to-r hover:from-[#C8A96A] hover:via-[#E8D399] hover:to-[#C8A96A] hover:text-graphite text-[#FFFFF5] font-display font-bold uppercase tracking-widest py-2 transition-all duration-500 text-sm shadow-lg flex items-center justify-center cursor-pointer border-none outline-none relative z-10">
+                        class="w-full bg-[#c8a96a] hover:bg-gradient-to-r hover:from-[#C8A96A] hover:via-[#E8D399] hover:to-[#C8A96A] hover:text-graphite text-[#FFFFF5] font-serif font-bold uppercase tracking-[0.2em] py-3 transition-all duration-500 text-sm shadow-xl flex items-center justify-center cursor-pointer border-none outline-none relative z-10">
                         ĐỔI NGÀY
                     </button>
                     <!-- Warning -->
-                    <div class="mt-0.5 left-0 w-full pointer-events-none flex flex-col items-center">
+                    <div class="mt-1.5 left-0 w-full pointer-events-none flex flex-col items-center">
                         <p id="modal-booking-warning"
                             class="text-[9px] text-center font-bold italic leading-tight transition-all duration-300 text-[#8B4513] px-4">
                             Chồn ưu tiên nhận đặt phòng từ 2 đêm. Với đặt phòng 1 đêm, vui lòng liên hệ Zalo.
@@ -603,16 +627,19 @@
                     phòng
                 </div>
 
-                <!-- Confirm Button on TOP -->
-                <button id="confirm-waitlist-btn"
-                    class="bg-primary hover:bg-gradient-to-r hover:from-[#C8A96A] hover:via-[#E8D399] hover:to-[#C8A96A] hover:text-graphite text-white px-6 py-2 rounded-full font-display font-bold uppercase tracking-widest text-[10px] sm:text-[11px] shadow-lg active:scale-95 transition-all duration-500 w-max">
-                    Xác nhận đặt
-                </button>
+                <!-- Footer Content (Ảnh 2 style) -->
+                <div class="w-full flex flex-col items-center">
+                    <div class="w-full flex flex-col items-center mb-2">
+                        <button id="confirm-waitlist-btn"
+                            class="bg-[#C8A96A] hover:bg-gradient-to-r hover:from-[#C8A96A] hover:via-[#E8D399] hover:to-[#C8A96A] hover:text-graphite text-white px-6 py-2 rounded-full font-display font-bold uppercase tracking-[0.1em] text-[11px] shadow-lg active:scale-95 transition-all duration-500 w-max border border-white/20">
+                            XÁC NHẬN ĐẶT
+                        </button>
+                    </div>
 
-                <!-- Waitlist Items BELOW -->
-                <div class="flex items-center gap-3 overflow-x-auto no-scrollbar py-1 w-full justify-center"
-                    id="waitlist-items">
-                    <!-- Selected room thumbnails will appear here -->
+                    <div class="flex items-center gap-3 overflow-x-auto no-scrollbar py-1 w-full justify-center px-4"
+                        id="waitlist-items">
+                        <!-- Selected room thumbnails will appear here -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -664,6 +691,8 @@
     </nav>
 
     <script src="history-bubble.js"></script>
+    <!-- Fly Animation Container -->
+    <div id="fly-container" class="fixed inset-0 pointer-events-none z-[300]"></div>
 </body>
 
 </html>
