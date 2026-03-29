@@ -1889,7 +1889,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 bookingData.children = childCountLocal;
                 bookingData.childrenAgeCategory = childrenAgeStr;
                 sessionStorage.setItem('chonVillageBooking', JSON.stringify(bookingData));
-                
+
                 selectedRooms.length = 0; // Clear previous selections
                 window.location.reload(); // Refresh entire state from storage
                 return;

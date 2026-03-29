@@ -1,5 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Helper Function
+    let lastGeneratedBillText = ""; // Variable to store the bill text for sync
+    // 0. Configuration
+    window.GAS_SYNC_URL = "https://script.google.com/macros/s/AKfycbxFreoNcVH6QN_EALRH9FSuoMSLbRdPwOCpMJHek8-WbrL7PIhsEjnmmIDWBOBx2E5O/exec";
+
     const renderCurrency = (num) => new Intl.NumberFormat('vi-VN').format(num) + 'đ';
     const setSafeText = (id, text) => {
         const el = document.getElementById(id);
@@ -7,11 +10,18 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     console.log("Checkout Script Initialized");
-
-    // 2. Check for PayOS Return Parameters
     const urlParams = new URLSearchParams(window.location.search);
     const status = urlParams.get('status');
     const orderCodeFromUrl = urlParams.get('orderCode');
+
+    // RECOVER BILL if this is a payment success return
+    if (status) {
+        lastGeneratedBillText = sessionStorage.getItem('chonVillageLastBill') || "";
+        console.log("[RECOVER] Recovered bill content length:", lastGeneratedBillText.length);
+    } else {
+        sessionStorage.removeItem('chonVillageLastBill');
+    }
+
 
     // 3. Retrieve Data From Session
     const bookingDataStr = sessionStorage.getItem('chonVillageBooking');
@@ -44,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const nights = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
 
     const formatDateObj = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-    const dateRangeStr = `${formatDateObj(checkinDate)} - ${formatDateObj(checkoutDate)} (${nights} đêm)`;
+    const dateRangeStr = `${formatDateObj(checkinDate)} - ${formatDateObj(checkoutDate)} (${nights} \u0111\u00eam)`;
 
     // 4. Pricing & Surcharge Logic
     let baseRoomTotal = 0;
@@ -54,26 +64,26 @@ document.addEventListener('DOMContentLoaded', () => {
     roomsData.forEach(room => {
         const roomBasePrice = parseInt(room.baseRoomTotal) || 0;
         baseRoomTotal += roomBasePrice;
-        
+
         // SPECIAL RULE: If stay >= 3 nights (4 days 3 nights), 
         // use standard surcharge (we take the first night's surcharge as "standard" 
         // or fallback to 450k). 
         // If < 3 nights, we use the specific surcharge passed.
         let rate = parseInt(room.surcharge) || 450000;
-        
-        // Note: The prompt says "hiển thị giá phụ thu người thứ 3 của ngày thường nếu khách đặt từ 4 ngày 3 đêm"
+
+        // Note: The prompt says "hiển thị giá phụ thu ngưá»i thứ 3 của ngày thưá»ng nếu khách đặt từ 4 ngày 3 \u0111\u00eam"
         // In this implementation, room.nights is passed from rooms.js.
         if (room.nights >= 3) {
             console.log(`[DEBUG] Stay is ${room.nights} nights (>= 3). Using standard surcharge rate.`);
             // Assuming the passed room.surcharge is the standard rate if rooms.js passed datesToStay[0]'s surcharge
         }
-        
+
         surchargeRates.push(rate);
 
         roomsWithTotals.push({
             ...room,
             basePrice: roomBasePrice,
-            surchargeAllocated: 0, 
+            surchargeAllocated: 0,
             surchargePerNight: 0,
             total: roomBasePrice
         });
@@ -81,11 +91,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Calculate Extra Guests (3rd person in shared rooms)
     const extraGuestsCount = Math.max(0, adultsCount - (roomsData.length * 2));
-    
+
     // Sort logic for surcharge application
     const sortedRates = [...surchargeRates].sort((a, b) => a - b);
     let totalSurchargePerNight = 0;
-    
+
     if (roomsData.length === 3) {
         const uniqueRates = new Set(sortedRates).size;
         if (extraGuestsCount === 1) {
@@ -124,22 +134,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     <h3 class="text-2xl font-serif font-bold mb-4 text-black border-b-2 border-primary/30 pb-3">${room.name}</h3>
                     <div class="space-y-4">
                         <div class="flex flex-col gap-0.5">
-                            <span class="text-black text-sm font-medium italic">Thời gian:</span>
-                            <span class="text-black text-sm font-bold leading-tight">Ngày Nhận ${formatDateObj(checkinDate)} - Ngày Trả ${formatDateObj(checkoutDate)} - ${nights + 1} ngày ${nights} đêm</span>
+                            <span class="text-black text-sm font-medium italic">Th\u1eddi gian:</span>
+                            <span class="text-black text-sm font-bold leading-tight">Ngày Nhận ${formatDateObj(checkinDate)} - Ngày Trả ${formatDateObj(checkoutDate)} - ${nights + 1} ngày ${nights} \u0111\u00eam</span>
                         </div>
                         <div class="flex flex-col gap-2 py-4 border-b-2 border-t-2 border-dashed border-primary/40">
-                            <span class="text-black text-sm uppercase tracking-wider font-bold">Chi tiết giá:</span>
+                            <span class="text-black text-sm uppercase tracking-wider font-bold">Chi ti\u1ebft gi\u00e1:</span>
                             <div class="space-y-3">
                                 <div class="flex flex-col text-sm">
                                     ${room.nightlyDetails ? room.nightlyDetails.map(n => {
-                                        const label = n.isHoliday ? "Giá Lễ" : "Giá Ngày";
-                                        return `<span class="text-black font-bold mt-0.5">${label} ${n.date} : ${renderCurrency(n.price)} / 1 Đêm</span>`;
-                                    }).join('') : (room.groupedNights ? room.groupedNights.map(group => {
-                                        const dateLabel = group.count > 1
-                                            ? `Giá Ngày ${group.startDate}-${group.endDate} :`
-                                            : `Giá ${group.isHoliday ? 'Ngày Lễ ' : 'Ngày '}${group.startDate} :`;
-                                        return `<span class="text-black font-bold mt-0.5">${dateLabel} ${renderCurrency(group.price)} / 1 Đêm</span>`;
-                                    }).join('') : `<span class="text-black font-bold mt-0.5">Giá phòng: ${renderCurrency(room.basePrice)}</span>`)}
+                const label = n.isHoliday ? "Giá Lễ" : "Giá Ngày";
+                return `<span class="text-black font-bold mt-0.5">${label} ${n.date} : ${renderCurrency(n.price)} / 1 \u0110\u00eam</span>`;
+            }).join('') : (room.groupedNights ? room.groupedNights.map(group => {
+                const dateLabel = group.count > 1
+                    ? `Giá Ngày ${group.startDate}-${group.endDate} :`
+                    : `Giá ${group.isHoliday ? 'Ngày Lễ ' : 'Ngày '}${group.startDate} :`;
+                return `<span class="text-black font-bold mt-0.5">${dateLabel} ${renderCurrency(group.price)} / 1 \u0110\u00eam</span>`;
+            }).join('') : `<span class="text-black font-bold mt-0.5">Giá phòng: ${renderCurrency(room.basePrice)}</span>`)}
                                 </div>
                                 ${room.surchargeAllocated > 0 ? `
                                 <div class="flex flex-col text-sm">
@@ -148,7 +158,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                         </div>
                         <div class="flex justify-between items-center pt-2 text-primary font-bold">
-                            <span>TỔNG CỘNG:</span>
+                            <span>T\u1ed4NG C\u1ed8NG:</span>
                             <span>${renderCurrency(room.total)}</span>
                         </div>
                     </div>
@@ -162,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Define success function using declaration for hoisting
     function handlePaymentSuccess(orderCode) {
         console.log("Executing handlePaymentSuccess for:", orderCode);
-        
+
         // Ensure summary and payment sections are visible if they were hidden
         const summarySection = document.getElementById('summary-section');
         const paymentSection = document.getElementById('payment-section');
@@ -179,7 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const qrLoading = document.getElementById('qr-loading');
         const qrImg = document.getElementById('checkout-qr');
         const actionBtns = document.querySelector('#payment-section .grid.grid-cols-2');
-        
+
         if (qrLoading) qrLoading.classList.add('hidden');
         if (qrImg) qrImg.classList.add('hidden');
         if (actionBtns) actionBtns.classList.add('hidden');
@@ -203,12 +213,75 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 50);
         }
 
-        // Clear Session for booking safety
-        sessionStorage.removeItem('chonVillageBooking');
-        sessionStorage.removeItem('chonVillageSelectedRooms');
-        sessionStorage.removeItem('chonVillageSelectedRoom');
+        // SAVE orderCode to use after info confirmation
+        window.lastOrderCode = orderCode;
+        sessionStorage.setItem('chonVillageLastOrderCode', orderCode);
     }
     window.handlePaymentSuccess = handlePaymentSuccess;
+
+    async function syncToCalendarBridge(orderCode) {
+        try {
+            const bookingDataStr = sessionStorage.getItem('chonVillageBooking');
+            const selectedRoomsStr = sessionStorage.getItem('chonVillageSelectedRooms') || sessionStorage.getItem('chonVillageSelectedRoom');
+            const guestName = document.getElementById('guest-fullname')?.value || "Web Guest";
+            
+            const storedBill = sessionStorage.getItem('chonVillageLastBill') || "";
+
+            if (!bookingDataStr || !selectedRoomsStr) return;
+
+            const bookingData = JSON.parse(bookingDataStr);
+            const rooms = selectedRoomsStr.startsWith('[') ? JSON.parse(selectedRoomsStr) : [JSON.parse(selectedRoomsStr)];
+
+            // Helper to generate date range (Avoid UTC shift)
+            const dates = [];
+            let curr = parseLocal(bookingData.checkin);
+            const end = parseLocal(bookingData.checkout);
+            while (curr < end) {
+                const y = curr.getFullYear();
+                const m = String(curr.getMonth() + 1).padStart(2, '0');
+                const d = String(curr.getDate()).padStart(2, '0');
+                dates.push(`${y}-${m}-${d}`);
+                curr.setDate(curr.getDate() + 1);
+            }
+
+            const payload = {
+                guestName: guestName,
+                dates: dates,
+                roomIDs: rooms.map(r => r.id),
+                orderCode: orderCode,
+                billContent: lastGeneratedBillText || storedBill || ""
+            };
+
+            const contentLen = payload.billContent.length;
+            console.log("[SYNC-DEBUG] Sending Bill Content (Length):", contentLen);
+
+            const GAS_URL = window.GAS_SYNC_URL;
+            if (!GAS_URL) {
+                console.warn("[SYNC] GAS_URL not set.");
+                return;
+            }
+
+            // Optional: User check
+            if (contentLen < 50) {
+                console.warn("[SYNC] Bill content seems too short or empty. Please check confirm-info step.");
+            }
+
+            const res = await fetch(GAS_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify(payload)
+            });
+            console.log("[SYNC] Sent to GAS.");
+        } catch (err) {
+            console.error("[SYNC] Error:", err);
+        } finally {
+            // FINALLY CLEAR SESSION after successful (or attempted) sync
+            sessionStorage.removeItem('chonVillageSelectedRooms');
+            sessionStorage.removeItem('chonVillageSelectedRoom');
+            sessionStorage.removeItem('chonVillageBooking');
+            sessionStorage.removeItem('chonVillageLastOrderCode');
+        }
+    }
 
     // Trigger success logic if URL says PAID (Case-insensitive)
     const isUrlPaid = status && status.toUpperCase() === 'PAID';
@@ -227,7 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (confirmBtn) {
         confirmBtn.classList.add('hidden'); // Hide original confirm button as we use Transfer button now
     }
-    
+
     if (summarySection) {
         summarySection.classList.add('hidden', 'opacity-0');
     }
@@ -241,7 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (agreeCheckbox) {
         agreeCheckbox.addEventListener('change', async (e) => {
             const isChecked = e.target.checked;
-            
+
             if (isChecked) {
                 const apiBase = (window.location.protocol === 'file:') ? 'http://localhost:3000' : '';
                 console.log("[API] Using base:", apiBase || '(relative)');
@@ -254,7 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (paymentSection) {
                     paymentSection.classList.remove('hidden');
                     setTimeout(() => paymentSection.classList.remove('opacity-0'), 10);
-                    
+
                     // Populate basic info
                     const qrLoading = document.getElementById('qr-loading');
                     const depositAmountEl = document.getElementById('checkout-deposit-amount');
@@ -271,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 description: "Thanh toan"
                             })
                         });
-                        
+
                         const data = await response.json();
                         if (!response.ok) throw new Error(data.error || "Lỗi kết nối Server");
 
@@ -289,7 +362,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 // MODERN branded VietQR: includes NAPAS + Bank Logos
                                 const brandedQrUrl = `https://img.vietqr.io/image/${payosData.bin}-${payosData.accountNumber}-print.png?amount=${payosData.amount}&addInfo=${encodeURIComponent(payosData.description)}&accountName=${encodeURIComponent(payosData.accountName)}`;
                                 qrImg.src = brandedQrUrl;
-                                
+
                                 qrImg.onload = () => {
                                     qrImg.classList.remove('hidden');
                                     if (qrLoading) qrLoading.classList.add('hidden');
@@ -298,12 +371,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (accountNoEl) accountNoEl.textContent = payosData.accountNumber;
                             if (accountNameEl) accountNameEl.textContent = payosData.accountName;
                             const bankNameEl = document.getElementById('payos-bank-name');
-                            if (bankNameEl) bankNameEl.textContent = payosData.bankName || "Ngân hàng TMCP Phương Đông (OCB)";
+                            if (bankNameEl) bankNameEl.textContent = payosData.bankName || "Ngân hàng TMCP Phương Äông (OCB)";
 
                             // QR Actions: Download & Share
                             const downloadBtn = document.getElementById('download-qr-btn');
                             const shareBtn = document.getElementById('share-qr-btn');
-                            
+
                             if (downloadBtn) {
                                 downloadBtn.onclick = async () => {
                                     try {
@@ -327,9 +400,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                     const shareUrl = payosData.checkoutUrl;
                                     const triggerSuccess = () => {
                                         const originalContent = shareBtn.innerHTML;
-                                        shareBtn.innerHTML = '<span class="material-symbols-outlined text-base leading-none">check</span><span>ĐÃ CHÉP LINK</span>';
+                                        shareBtn.innerHTML = '<span class="material-symbols-outlined text-base leading-none">check</span><span>ÄÃƒ CHÃ‰P LINK</span>';
                                         shareBtn.classList.add('bg-green-50', 'text-green-600', 'border-green-200');
-                                        setTimeout(() => { 
+                                        setTimeout(() => {
                                             shareBtn.innerHTML = originalContent;
                                             shareBtn.classList.remove('bg-green-50', 'text-green-600', 'border-green-200');
                                         }, 3000);
@@ -338,8 +411,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                     try {
                                         // 1. Prepare data & text
                                         const shareTitle = 'Thanh toán Chon Village';
-                                        const shareText = `Thanh toán cọc cho Chon Village. STK: ${payosData.accountNumber} (${payosData.accountName})`;
-                                        
+                                        const shareText = `Thanh toán cá»c cho Chon Village. STK: ${payosData.accountNumber} (${payosData.accountName})`;
+
                                         // 2. Try Image Sharing (Modern)
                                         if (navigator.canShare && window.isSecureContext) {
                                             const brandedQrApiUrl = `https://img.vietqr.io/image/${payosData.bin}-${payosData.accountNumber}-print.png?amount=${payosData.amount}&addInfo=${encodeURIComponent(payosData.description)}&accountName=${encodeURIComponent(payosData.accountName)}`;
@@ -450,7 +523,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                         console.error("[BANK PICKER] Missing PayOS data");
                                         return;
                                     }
-                                    
+
                                     const acc = payosData.accountNumber || "";
                                     const bin = payosData.bin || ""; // Recipient Bank BIN (e.g., 970448 for OCB)
                                     const am = payosData.amount || 0;
@@ -459,7 +532,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     // The exact structure requested for dl.vietqr.io:
                                     // app=[APP_ID] & ba=[RECIPIENT_ACC]@[RECIPIENT_BIN] & am=[AMOUNT] & tn=[NOTE]
                                     const url = `https://dl.vietqr.io/pay?app=${id}&ba=${acc}@${bin}&am=${am}&tn=${tn}`;
-                                    
+
                                     console.log(`[BANK PICKER] Triggering NAPAS Deep Link for ${id}:`, url);
                                     hidePicker(); // Close UI immediately
                                     window.location.href = url;
@@ -467,8 +540,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                                 const renderPicker = (filter = '') => {
                                     const topBanks = ALL_BANKS.filter(b => b.priority);
-                                    const filtered = ALL_BANKS.filter(b => 
-                                        b.name.toLowerCase().includes(filter.toLowerCase()) || 
+                                    const filtered = ALL_BANKS.filter(b =>
+                                        b.name.toLowerCase().includes(filter.toLowerCase()) ||
                                         b.id.toLowerCase().includes(filter.toLowerCase())
                                     );
 
@@ -503,7 +576,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                                 transferBtn.onclick = showPicker;
                                 if (closeBtn) closeBtn.onclick = hidePicker;
-                                if (pickerOverlay) pickerOverlay.onclick = (e) => { if(e.target === pickerOverlay) hidePicker(); };
+                                if (pickerOverlay) pickerOverlay.onclick = (e) => { if (e.target === pickerOverlay) hidePicker(); };
                                 if (searchInput) searchInput.oninput = (e) => renderPicker(e.target.value);
                                 if (fallbackBtn) fallbackBtn.onclick = () => {
                                     hidePicker();
@@ -518,7 +591,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 startPaymentPolling(pollId);
                             }
                         } else {
-                            throw new Error("PayOS không trả về mã QR. Hãy kiểm tra Dashboard.");
+                            throw new Error("PayOS không trả vá» mã QR. Hãy kiểm tra Dashboard.");
                         }
                     } catch (err) {
                         console.error("PayOS Fetch Error:", err);
@@ -567,19 +640,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const apiBase = (window.location.protocol === 'file:') ? 'http://localhost:3000' : '';
             console.log(`[POLLING] Fetching status for ${orderCode}...`);
             const res = await fetch(`${apiBase}/get-order/${orderCode}`);
-            
+
             if (!res.ok) {
                 const errorData = await res.json().catch(() => ({}));
                 console.error("[POLLING] Server Error:", res.status, errorData);
                 return { paid: false, status: `ERROR_${res.status}`, detail: errorData.error };
             }
-            
+
             const data = await res.json();
             console.log(`[PAYOS DEBUG] Full data for ${orderCode}:`, data);
-            
+
             const currentStatus = (data.status || "UNKNOWN").toUpperCase();
             const isActuallyPaid = ['PAID', 'COMPLETED', 'SUCCESS'].includes(currentStatus);
-            
+
             if (isActuallyPaid) {
                 console.log("!!! SUCCESS DETECTED !!! Status:", currentStatus);
                 if (pollingInterval) clearInterval(pollingInterval);
@@ -587,7 +660,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 handlePaymentSuccess(orderCode);
                 return { paid: true, status: currentStatus };
             }
-            
+
             return { paid: false, status: currentStatus, data: data };
         } catch (e) {
             console.error("Check status exception:", e);
@@ -600,7 +673,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (pollingInterval) clearInterval(pollingInterval);
         currentPollingOrderCode = orderCode; // Store for visibility-tab-switch trigger
         console.log("Started polling for order:", orderCode);
-        
+
         // Show indicator after a short delay
         setTimeout(() => {
             if (statusIndicator && !window.location.search.includes('status=PAID')) {
@@ -612,7 +685,7 @@ document.addEventListener('DOMContentLoaded', () => {
         pollingInterval = setInterval(async () => {
             const result = await checkStatusOnce(orderCode);
             if (result && result.paid && statusText) {
-                statusText.textContent = "Đã nhận thanh toán!";
+                statusText.textContent = "Äã nhận thanh toán!";
             } else if (result && result.status === 'CANCELLED') {
                 if (statusText) statusText.textContent = "Giao dịch đã bị hủy.";
                 clearInterval(pollingInterval);
@@ -632,12 +705,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Manual Check Button
         if (manualBtn) {
             manualBtn.onclick = async () => {
-                manualBtn.textContent = "Đang kiểm tra...";
+                manualBtn.textContent = "Äang kiểm tra...";
                 const result = await checkStatusOnce(orderCode);
-                
+
                 if (result && result.paid) {
-                     manualBtn.textContent = "Đã nhận thanh toán!";
-                     // Success transition is handled inside checkStatusOnce
+                    manualBtn.textContent = "Äã nhận thanh toán!";
+                    // Success transition is handled inside checkStatusOnce
                 } else {
                     const statusTextStr = (result && result.status) ? result.status : "Lỗi";
                     manualBtn.textContent = `Chưa nhận được (Trạng thái: ${statusTextStr})`;
@@ -650,7 +723,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Protect handlePaymentSuccess with error logging
     const originalHandlePaymentSuccess = window.handlePaymentSuccess;
-    window.handlePaymentSuccess = function(orderCode) {
+    window.handlePaymentSuccess = function (orderCode) {
         console.log("--> Calling handlePaymentSuccess for order:", orderCode);
         try {
             if (originalHandlePaymentSuccess) {
@@ -684,26 +757,27 @@ document.addEventListener('DOMContentLoaded', () => {
             const phone = guestZaloInput ? guestZaloInput.value.trim() : "Chưa cung cấp";
 
             if (!name || name === "Quý khách") {
-                alert("Vui lòng nhập tên người đặt phòng.");
+                alert("Vui lòng nhập tên ngưá»i đặt phòng.");
                 return;
             }
 
             // Generate Bill Text
             const billText = generateBillText(name, phone);
-            
+            lastGeneratedBillText = billText; // Store for sync
+            sessionStorage.setItem('chonVillageLastBill', billText); // Persistent for refresh
+
             // PERSIST FOR HISTORY (Image 1 logic)
             sessionStorage.setItem('chonVillageLastBooking', JSON.stringify({
                 billText: billText,
                 timestamp: Date.now()
             }));
-            
+
             // Show bubble immediately
             if (window.refreshBookedBubble) window.refreshBookedBubble();
 
             if (billTextEl) {
                 billTextEl.innerHTML = billText.replace(/\n/g, '<br/>');
             }
-
             // Show Bill
             if (infoForm) infoForm.classList.add('hidden');
             if (billContainer) {
@@ -713,6 +787,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     billContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }, 50);
             }
+
+            // TRIGGER CALENDAR SYNC NOW that we have the bill
+            const orderCodeSync = window.lastOrderCode || sessionStorage.getItem('chonVillageLastOrderCode') || "PAID";
+            syncToCalendarBridge(orderCodeSync);
         });
     }
 
@@ -721,8 +799,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentDeposit = typeof depositAmount !== 'undefined' ? depositAmount : 0;
         const remaining = currentTotal - currentDeposit;
         const nightsCount = typeof nights !== 'undefined' ? nights : 1;
-        const nightsStr = nightsCount >= 3 ? `${nightsCount} đêm (${nightsCount + 1} ngày)` : `${nightsCount} đêm`;
-        
+        const nightsStr = nightsCount >= 3 ? `${nightsCount} \u0111\u00eam (${nightsCount + 1} ng\u00e0y)` : `${nightsCount} \u0111\u00eam`;
+
         const inDate = typeof checkinDate !== 'undefined' ? checkinDate : new Date();
         const outDate = typeof checkoutDate !== 'undefined' ? checkoutDate : new Date();
         const rData = typeof roomsData !== 'undefined' ? roomsData : [];
@@ -731,41 +809,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const adults = typeof adultsCount !== 'undefined' ? adultsCount : 2;
         const children = (bookingData && bookingData.children) ? parseInt(bookingData.children) : 0;
         const childrenAges = (bookingData && bookingData.childrenAgeCategory) ? bookingData.childrenAgeCategory.split(',').filter(a => a) : [];
-        
-        let guestStr = `${adults} người lớn`;
-        if (children < 0) children = 0; // safety
-        if (children > 0) {
-            guestStr += `, ${children} trẻ em (${childrenAges.join(', ')} tuổi)`;
-        }
 
-        return `BILL XÁC NHẬN ĐẶT PHÒNG 
+        let guestStr = `${adults} ng\u01b0\u1eddi l\u1edbn`;
+        if (children > 0) guestStr += `, ${children} tr\u1ebb em (${childrenAges.join(', ')} tu\u1ed5i)`;
 
-➖ THÔNG TIN
-- Địa chỉ: 07 Thánh Tâm - Phường 5, Tp. Đà Lạt
-https://maps.app.goo.gl/aW824oYN5dznY7JX9?g_st=com.google.maps.preview.copy
-- Liên hệ nhận phòng : 0889717713 (Mr. Trọng Đạt)
-- Hình thức thuê: ${roomsStr}
-
-➖ THÔNG TIN KHÁCH 
-- Tên khách hàng : ${name}
-- Số điện thoại : ${zalo}
-- Số người: ${guestStr}
-- Số ngày thuê: ${nightsStr}
-* Ngày nhận nhà: 14h00 ngày ${formatDateObj(inDate)}
-* Ngày trả nhà: 12h00 ngày ${formatDateObj(outDate)}
-
-✅ THANH TOÁN
-- Thành tiền: ${renderCurrency(currentTotal)}
-- Đặt cọc: ${renderCurrency(currentDeposit)}
-( Xác nhận đã nhận được tiền cọc )
-- Còn lại: ${renderCurrency(remaining)}
-Số tiền còn lại quý khách vui lòng thanh toán hết ngay sau khi nhận nhà
-
-➖ GHI CHÚ
-- Quý khách vui lòng tự bảo vệ tài sản cá nhân, mọi mất mát bên home không chịu trách nhiệm. 
-- Booking không hoàn, huỷ, đổi dưới mọi hình thức. 
-- Quý khách vui lòng đem theo CMND hoặc Passport để làm thủ tục đăng kí lưu trú.
-- Quý khách vui lòng đi đúng số lượng người, nếu có phát sinh phụ thu.`;
+        return `BILL X\u00c1C NH\u1eacN \u0110\u1eb6T PH\u00d2NG \n\n\u2796 TH\u00d4NG TIN\n- \u0110\u1ecba ch\u1ec9: 07 Th\u00e1nh T\u00e2m - Ph\u01b0\u1eddng 5, Tp. \u0110\u00e0 L\u1ea1t\nhttps://maps.app.goo.gl/aW824oYN5dznY7JX9?g_st=com.google.maps.preview.copy\n- Li\u00ean h\u1ec7 nh\u1eadn ph\u00f2ng : 0889717713 (Mr. Tr\u1ecdng \u0110\u1ea1t)\n- H\u00ecnh th\u1ee9c thu\u00ea: ${roomsStr}\n\n\u2796 TH\u00d4NG TIN KH\u00c1CH \n- T\u00ean kh\u00e1ch h\u00e0ng : ${name}\n- S\u1ed1 \u0111i\u1ec7n tho\u1ea1i : ${zalo}\n- S\u1ed1 ng\u01b0\u1eddi: ${guestStr}\n- S\u1ed1 ng\u00e0y thu\u00ea: ${nightsStr}\n* Ng\u00e0y nh\u1eadn nh\u00e0: 14h00 ng\u00e0y ${formatDateObj(inDate)}\n* Ng\u00e0y tr\u1ea3 nh\u00e0: 12h00 ng\u00e0y ${formatDateObj(outDate)}\n\n\u2705 THANH TO\u00c1N\n- Th\u00e0nh ti\u1ec1n: ${renderCurrency(currentTotal)}\n- \u0110\u1eb7t c\u1ecdc: ${renderCurrency(currentDeposit)}\n( X\u00e1c nh\u1eadn \u0111\u00e3 nh\u1eadn \u0111\u01b0\u1ee3c ti\u1ec1n c\u1ecdc )\n- C\u00f2n l\u1ea1i: ${renderCurrency(remaining)}\nS\u1ed1 ti\u1ec1n c\u00f2n l\u1ea1i qu\u00fd kh\u00e1ch vui l\u00f2ng thanh to\u00e1n h\u1ebft ngay sau khi nh\u1eadn nh\u00e0\n\n\u2796 GHI CH\u00da\n- Qu\u00fd kh\u00e1ch vui l\u00f2ng t\u1ef1 b\u1ea3o v\u1ec7 tài sản cá nhân, mọi mất mát bên home không chịu trách nhiệm. \n- Booking không hoàn, huỷ, đổi dưới mọi hình thức. \n- Qu\u00fd khách vui lòng đem theo CMND hoặc Passport để làm thủ tục đăng ký lưu trú.\n- Qu\u00fd khách vui lòng đi đúng số lượng người, nếu có phát sinh phụ thu.`;
     };
 
     // Helper for non-secure contexts
@@ -796,7 +844,7 @@ Số tiền còn lại quý khách vui lòng thanh toán hết ngay sau khi nh�
 
             const triggerSuccess = () => {
                 const originalText = sendBillZaloBtn.innerHTML;
-                sendBillZaloBtn.innerHTML = '<span class="material-symbols-outlined text-sm">check</span><span>BẢN GỐC ĐÃ CHÉP & ĐANG MỞ ZALO...</span>';
+                sendBillZaloBtn.innerHTML = '<span class="material-symbols-outlined text-sm">check</span><span>Báº¢N Gá»C ÄÃƒ CHÃ‰P & ÄANG Má»ž ZALO...</span>';
                 setTimeout(() => { sendBillZaloBtn.innerHTML = originalText; }, 3000);
             };
 
@@ -812,4 +860,5 @@ Số tiền còn lại quý khách vui lòng thanh toán hết ngay sau khi nh�
     }
 
 });
+
 
