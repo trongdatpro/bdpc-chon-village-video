@@ -1799,7 +1799,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 // Lead Time rule applies ONLY to current calendar month
                 const isWithinPeriod = isCurrentMonth && (daysLead <= minDaysLead);
-
                 if (!isWithinPeriod) {
                     const getStrLocal = d => {
                         const yy = d.getFullYear();

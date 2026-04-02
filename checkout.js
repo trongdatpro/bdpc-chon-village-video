@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     let lastGeneratedBillText = ""; // Variable to store the bill text for sync
     // 0. Configuration
-    window.GAS_SYNC_URL = "https://script.google.com/macros/s/AKfycbxFreoNcVH6QN_EALRH9FSuoMSLbRdPwOCpMJHek8-WbrL7PIhsEjnmmIDWBOBx2E5O/exec";
+    window.GAS_SYNC_URL = "https://hook.us2.make.com/b46yr5o3cerg8rgzrxdd2wqf2adc97f5";
 
     const renderCurrency = (num) => new Intl.NumberFormat('vi-VN').format(num) + 'đ';
     const setSafeText = (id, text) => {
@@ -227,15 +227,27 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const storedBill = sessionStorage.getItem('chonVillageLastBill') || "";
 
-            if (!bookingDataStr || !selectedRoomsStr) return;
+            if (!bookingDataStr || !selectedRoomsStr) {
+                console.error("[SYNC] Missing booking/room data in session.");
+                return;
+            }
 
             const bookingData = JSON.parse(bookingDataStr);
             const rooms = selectedRoomsStr.startsWith('[') ? JSON.parse(selectedRoomsStr) : [JSON.parse(selectedRoomsStr)];
 
             // Helper to generate date range (Avoid UTC shift)
             const dates = [];
-            let curr = parseLocal(bookingData.checkin);
-            const end = parseLocal(bookingData.checkout);
+            const checkinObj = parseLocal(bookingData.checkin);
+            const checkoutObj = parseLocal(bookingData.checkout);
+            
+            if (!checkinObj || isNaN(checkinObj.getTime())) {
+                console.error("[SYNC] Invalid Check-in Date:", bookingData.checkin);
+                return;
+            }
+
+            let curr = new Date(checkinObj);
+            const end = checkoutObj && !isNaN(checkoutObj.getTime()) ? checkoutObj : new Date(curr.getTime() + 86400000);
+            
             while (curr < end) {
                 const y = curr.getFullYear();
                 const m = String(curr.getMonth() + 1).padStart(2, '0');
@@ -246,40 +258,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const payload = {
                 guestName: guestName,
+                checkin: bookingData.checkin, // YYYY-MM-DD
+                checkout: bookingData.checkout, // YYYY-MM-DD
+                nights: Math.max(1, dates.length),
                 dates: dates,
                 roomIDs: rooms.map(r => r.id),
+                roomDetails: rooms.map(r => ({
+                    id: r.id,
+                    name: r.name,
+                    total: parseInt(r.total) || 0
+                })),
                 orderCode: orderCode,
-                billContent: lastGeneratedBillText || storedBill || ""
+                billContent: lastGeneratedBillText || storedBill || "NO_BILL_CONTENT",
+                timestamp: new Date().toISOString()
             };
 
-            const contentLen = payload.billContent.length;
-            console.log("[SYNC-DEBUG] Sending Bill Content (Length):", contentLen);
+            const contentLen = (payload.billContent || "").length;
+            console.log("[SYNC-DEBUG] Payload Prepared:", payload);
 
             const GAS_URL = window.GAS_SYNC_URL;
             if (!GAS_URL) {
-                console.warn("[SYNC] GAS_URL not set.");
+                console.warn("[SYNC] GAS_URL (Make.com/Apps Script) not set.");
                 return;
-            }
-
-            // Optional: User check
-            if (contentLen < 50) {
-                console.warn("[SYNC] Bill content seems too short or empty. Please check confirm-info step.");
             }
 
             const res = await fetch(GAS_URL, {
                 method: 'POST',
-                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            console.log("[SYNC] Sent to GAS.");
+            console.log("[SYNC] Sent to Webhook. Success:", res.ok);
+            
+            // OPTIONAL: Clear session after confirm-info only if you want to prevent multiple syncs
+            // sessionStorage.removeItem('chonVillageSelectedRooms');
+            // sessionStorage.removeItem('chonVillageSelectedRoom');
         } catch (err) {
-            console.error("[SYNC] Error:", err);
-        } finally {
-            // FINALLY CLEAR SESSION after successful (or attempted) sync
-            sessionStorage.removeItem('chonVillageSelectedRooms');
-            sessionStorage.removeItem('chonVillageSelectedRoom');
-            sessionStorage.removeItem('chonVillageBooking');
-            sessionStorage.removeItem('chonVillageLastOrderCode');
+            console.error("[SYNC] Error in syncToCalendarBridge:", err);
         }
     }
 
