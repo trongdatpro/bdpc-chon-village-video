@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chồn Village - Command Center 🦊</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #ff7e5f;
+            --secondary: #feb47b;
+            --bg: #0f172a;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --text: #f8fafc;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            display: grid;
+            gap: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 5px;
+        }
+
+        /* Glassmorphism Card */
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        h2 { font-size: 1.2rem; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 15px;
+            color: white;
+            font-size: 0.9rem;
+            resize: none;
+            outline: none;
+            transition: 0.3s;
+        }
+
+        textarea:focus { border-color: var(--primary); box-shadow: 0 0 10px rgba(255, 126, 95, 0.3); }
+
+        .btn {
+            width: 100%;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 12px;
+            border: none;
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.3s transform, 0.3s box-shadow;
+        }
+
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(255, 126, 95, 0.4); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Chat UI */
+        .chat-container {
+            height: 400px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 15px;
+        }
+
+        .msg {
+            max-width: 85%;
+            padding: 10px 15px;
+            border-radius: 15px;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        .msg.bot { background: rgba(255, 255, 255, 0.1); align-self: flex-start; border-bottom-left-radius: 2px; }
+        .msg.user { background: var(--primary); align-self: flex-end; border-bottom-right-radius: 2px; }
+
+        .chat-input-area { display: flex; gap: 10px; }
+        .chat-input-area input {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 12px;
+            color: white;
+            outline: none;
+        }
+
+        #status {
+            font-size: 0.85rem;
+            text-align: center;
+            margin-top: 10px;
+            color: #94a3b8;
+        }
+
+        /* Mobile specific */
+        @media (max-width: 600px) {
+            body { padding: 10px; }
+            .header h1 { font-size: 1.5rem; }
+            .card { padding: 15px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header class="header">
+            <h1>Chồn Village Admin 🦊</h1>
+            <p>Trung tâm chỉ huy & Trợ lý thông minh</p>
+        </header>
+
+        <!-- Bill Sync Section -->
+        <div class="card">
+            <h2>📦 Đồng bộ Bill nhanh</h2>
+            <textarea id="billInput" placeholder="Dán nội dung Xác nhận thuê home vào đây..."></textarea>
+            <button class="btn" id="syncBtn" onclick="syncBill()">Đồng bộ 3 Lịch Ngay</button>
+            <div id="status"></div>
+        </div>
+
+        <!-- AI Assistant Sections -->
+        <div class="card chat-container">
+            <h2>💬 Chat với Trợ lý Chồn</h2>
+            <div class="chat-messages" id="chatBox">
+                <div class="msg bot">Ní ơi! Chồn nghe đây, ní cần Chồn giúp gì về lịch hay phòng ốc không? 🦊</div>
+            </div>
+            <div class="chat-input-area">
+                <input type="text" id="chatInput" placeholder="Hỏi Chồn điều gì đó..." onkeypress="if(event.key==='Enter') sendMessage()">
+                <button style="width: 50px; border-radius: 12px; border: none; background: var(--primary); color: white; cursor: pointer;" onclick="sendMessage()">✈️</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const adminChatHistory = [];
+
+        async function syncBill() {
+            const billText = document.getElementById('billInput').value;
+            const btn = document.getElementById('syncBtn');
+            const status = document.getElementById('status');
+
+            if (!billText.trim()) return alert("Dán bill vào đã ní ơi!");
+
+            btn.disabled = true;
+            status.innerText = "Chồn đang xử lý bằng Gemini, chờ xíu nhé...";
+
+            try {
+                const res = await fetch('/api/agent-sync-bill', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ billText })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    let html = `<div style="color:#4ade80;margin-bottom:8px">${data.message}</div>`;
+                    if (data.details) {
+                        data.details.forEach(d => {
+                            html += `<div style="margin:4px 0;font-size:13px">📦 <b>${d.guest}</b> — ${d.booking}: `;
+                            d.syncResults.forEach(s => {
+                                html += s.error
+                                    ? `<span style="color:#f87171">[${s.sheet}:LỖI] </span>`
+                                    : `<span style="color:#4ade80">[${s.sheet}:OK] </span>`;
+                            });
+                            html += `</div>`;
+                        });
+                    }
+                    status.innerHTML = html;
+                    document.getElementById('billInput').value = '';
+                } else {
+                    status.innerHTML = `<span style="color: #f87171">${data.message}</span>`;
+                }
+            } catch (err) {
+                status.innerText = "Lỗi rồi ní ơi, kiểm tra lại server nhé!";
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            addChatMessage(text, "user");
+            input.value = '';
+            adminChatHistory.push({ role: 'user', content: text });
+
+            try {
+                const res = await fetch('/api/admin-chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messages: adminChatHistory })
+                });
+                const data = await res.json();
+                const reply = res.ok ? data.reply : (data.error || 'Lỗi server');
+                addChatMessage(reply, "bot");
+                adminChatHistory.push({ role: 'assistant', content: reply });
+            } catch (err) {
+                addChatMessage("Chồn đang bị nghẹn, ní thử lại sau nhé!", "bot");
+            }
+        }
+
+        function addChatMessage(text, sender) {
+            const box = document.getElementById('chatBox');
+            const div = document.createElement('div');
+            div.className = `msg ${sender}`;
+            div.innerText = text;
+            box.appendChild(div);
+            box.scrollTop = box.scrollHeight;
+        }
+    </script>
+</body>
+</html>

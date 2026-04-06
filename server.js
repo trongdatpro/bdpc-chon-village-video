@@ -1,8 +1,11 @@
 const express = require('express');
 const cors = require('cors');
-// Lấy đúng đoạn code: const { PayOS } = require('@payos/node');
-const { PayOS } = require('@payos/node'); 
+const { PayOS } = require('@payos/node');
+const Anthropic = require('@anthropic-ai/sdk');
+const { syncToCalendarAgent } = require("./bookingAgent");
 require('dotenv').config();
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const path = require('path');
 const app = express();
@@ -50,7 +53,85 @@ app.post('/create-payment-link', async (req, res) => {
     }
 });
 
-// Đoạn 3: Kiểm tra trạng thái đơn hàng (v2 SDK sử dụng paymentRequests.get)
+// API: Agent tiếp nhận và đồng bộ Bill
+app.post('/api/agent-sync-bill', async (req, res) => {
+    try {
+        const { billText } = req.body;
+        if (!billText) return res.status(400).json({ error: "Thiếu nội dung bill" });
+        
+        console.log("[AGENT-SYNC] Đang nhận bill từ Admin...");
+        const result = await syncToCalendarAgent(billText);
+        res.json(result);
+    } catch (error) {
+        console.error("Lỗi Agent Sync Bill:", error.message);
+        res.status(500).json({ success: false, message: "Lỗi Server rồi ní ơi!" });
+    }
+});
+
+// API: Admin Chat — Trợ lý Chồn Village (dùng Gemini)
+const ADMIN_SYSTEM_PROMPT = `Bạn là "Chú Chồn", trợ lý AI thông minh của homestay Chồn Village tại Đà Lạt.
+Bạn hỗ trợ Admin quản lý homestay. Trả lời bằng tiếng Việt, ngắn gọn (2-4 câu), thân thiện.
+
+THÔNG TIN HỆ THỐNG:
+- 6 phòng: White, Black, Pink, Green, Gray, Gold
+- Sức chứa: tối đa 3 người/phòng. Green Room: ưu tiên trẻ dưới 6 tuổi.
+- Đặt phòng -> Thanh toán PayOS -> Agent đồng bộ Sheets.
+
+Phong cách: Dùng "ní" để gọi admin. Trả lời chuyên nghiệp nhưng vẫn gần gũi. Emoji 🦊.`;
+
+// API: Guest Chat — Chú Chồn hỏi thăm khách đặt phòng (dùng Gemini)
+const GUEST_SYSTEM_PROMPT = `Bạn là "Chú Chồn", mascot dễ thương của Chồn Village Homestay tại Đà Lạt.
+Nói chuyện với khách đang đặt phòng. Trả lời bằng tiếng Việt, thân thiện, vui vẻ.
+
+THÔNG TIN TƯ VẤN:
+- 6 phòng: White, Black, Pink, Green, Gray, Gold (Cao cấp)
+- Sức chứa: tối đa 3 người/phòng. Green Room cho gia đình có bé nhỏ.
+- Ưu tiên đặt từ 2 đêm. Thanh toán qua PayOS tiện lợi.
+
+Phong cách: Gọi khách là "ní", trả lời tự nhiên, dễ thương và súc tích (khoảng 2-3 câu). Emoji phù hợp.`;
+
+async function claudeChat(systemPrompt, messages) {
+    const response = await anthropic.messages.create({
+        model: "claude-sonnet-4-5",
+        max_tokens: 500,
+        system: systemPrompt,
+        messages: messages.map(m => ({ role: m.role, content: m.content }))
+    });
+    return response.content[0].text;
+}
+
+app.post('/api/admin-chat', async (req, res) => {
+    try {
+        const { messages } = req.body;
+        if (!messages || !Array.isArray(messages)) {
+            return res.status(400).json({ error: "Thiếu messages" });
+        }
+        console.log("[ADMIN-CHAT] Nhận câu hỏi từ Admin...");
+        const reply = await claudeChat(ADMIN_SYSTEM_PROMPT, messages);
+        res.json({ reply });
+    } catch (error) {
+        console.error("Lỗi Admin Chat:", error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/guest-chat', async (req, res) => {
+    try {
+        const { messages } = req.body;
+        if (!messages || !Array.isArray(messages)) {
+            return res.status(400).json({ error: "Thiếu messages" });
+        }
+        console.log("[GUEST-CHAT] Khách đang hỏi...");
+        const reply = await claudeChat(GUEST_SYSTEM_PROMPT, messages);
+        res.json({ reply });
+    } catch (error) {
+        console.error("Lỗi Guest Chat:", error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- Xoá endpoint trùng ở đây ---
+
 app.get('/get-order/:orderCode', async (req, res) => {
     try {
         const param = req.params.orderCode;

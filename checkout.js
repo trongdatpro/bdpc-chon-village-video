@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     let lastGeneratedBillText = ""; // Variable to store the bill text for sync
-    // 0. Configuration
-    window.GAS_SYNC_URL = "https://hook.us2.make.com/b46yr5o3cerg8rgzrxdd2wqf2adc97f5";
+    // 0. Configuration - REDIRECT TO AI AGENT
+    window.GAS_SYNC_URL = "/api/agent-sync-bill";
 
     const renderCurrency = (num) => new Intl.NumberFormat('vi-VN').format(num) + 'đ';
     const setSafeText = (id, text) => {
@@ -219,149 +219,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     window.handlePaymentSuccess = handlePaymentSuccess;
 
-    async function syncToCalendarBridge(orderCode) {
+    async function syncToCalendarBridge() {
         try {
-            const bookingDataStr = sessionStorage.getItem('chonVillageBooking');
-            const selectedRoomsStr = sessionStorage.getItem('chonVillageSelectedRooms') || sessionStorage.getItem('chonVillageSelectedRoom');
-            const guestName = document.getElementById('guest-fullname')?.value || "Web Guest";
-            
             const storedBill = sessionStorage.getItem('chonVillageLastBill') || "";
-
-            if (!bookingDataStr || !selectedRoomsStr) {
-                console.error("[SYNC] Missing booking/room data in session.");
-                return;
-            }
-
-            const bookingData = JSON.parse(bookingDataStr);
-            const rooms = selectedRoomsStr.startsWith('[') ? JSON.parse(selectedRoomsStr) : [JSON.parse(selectedRoomsStr)];
-
-            // 3. Helper to generate date range (Avoid UTC shift)
-            const dates = [];
-            const checkinObj = parseLocal(bookingData.checkin);
-            const checkoutObj = parseLocal(bookingData.checkout);
-            
-            if (!checkinObj || isNaN(checkinObj.getTime())) {
-                console.error("[SYNC] Invalid Check-in Date:", bookingData.checkin);
-                return;
-            }
-
-            let curr = new Date(checkinObj);
-            const end = checkoutObj && !isNaN(checkoutObj.getTime()) ? checkoutObj : new Date(curr.getTime() + 86400000);
-            
-            while (curr < end) {
-                const y = curr.getFullYear();
-                const m = String(curr.getMonth() + 1).padStart(2, '0');
-                const d = String(curr.getDate()).padStart(2, '0');
-                dates.push(`${y}-${m}-${d}`);
-                curr.setDate(curr.getDate() + 1);
-            }
-
-            // 4. Calculations (Integer enforced)
-            const d1 = checkinObj.getDate();
-            const d2 = checkoutObj.getDate();
-            
-            // Internal (Day 1 = Row 3)
-            const rIntStart = Math.floor(d1 + 1);
-            let rIntEnd = Math.floor(d2 + 1);
-
-            // Sale (Day 1 = Row 8)
-            const rSaleStart = Math.floor(d1 + 6);
-            let rSaleEnd = Math.floor(d2 + 6);
-
-            // Data Calendar
-            const rData = Math.floor(d1 + 1);
-
-            // Cross-month safety
-            if (checkoutObj.getMonth() !== checkinObj.getMonth()) {
-                rIntEnd = 35; rSaleEnd = 38;
-            }
-
-            const roomColMap = {
-                "White_Room": 1, "Black_Room": 2, "Pink_Room": 3,
-                "Green_Room": 4, "Gray_Room": 5, "Gold_Room": 6
-            };
-
             const billText = lastGeneratedBillText || storedBill || "BILL_MISSING";
-
-            // BUILDING PAYLOADS
-            const reqInt = [];
-            const reqSale = [];
-
-            rooms.forEach(r => {
-                const col = roomColMap[r.id] || 1;
-                
-                // INTERNAL (Matched rows)
-                const rangeInt = { sheetId: 361802428, startRowIndex: rIntStart, endRowIndex: rIntEnd, startColumnIndex: col, endColumnIndex: col + 1 };
-                const rowsInt = [];
-                for (let i = 0; i < (rIntEnd - rIntStart); i++) {
-                    rowsInt.push({ values: [{
-                        userEnteredValue: { stringValue: billText },
-                        userEnteredFormat: { backgroundColor: { red: 0.9, green: 0.6, blue: 0.6 }, textFormat: { fontSize: 9 }, verticalAlignment: "TOP", wrapStrategy: "WRAP" }
-                    }] });
-                }
-
-                reqInt.push({
-                    updateCells: {
-                        range: rangeInt,
-                        rows: rowsInt,
-                        fields: "userEnteredValue,userEnteredFormat(backgroundColor,textFormat,verticalAlignment,wrapStrategy)"
-                    }
-                });
-                if (rIntEnd - rIntStart > 1) {
-                    reqInt.push({ mergeCells: { range: rangeInt, mergeType: "MERGE_ALL" } });
-                }
-
-                // SALE (Matched rows + Fail-safe)
-                const rangeSaleIdx = { sheetId: 521586608, startRowIndex: rSaleStart, endRowIndex: rSaleEnd, startColumnIndex: col, endColumnIndex: col + 1 };
-                const rowsSale = [];
-                for (let i = 0; i < (rSaleEnd - rSaleStart); i++) {
-                    rowsSale.push({ values: [{
-                        userEnteredValue: { stringValue: "CV_OK" }
-                    }] });
-                }
-
-                reqSale.push({
-                    updateCells: {
-                        range: rangeSaleIdx,
-                        rows: rowsSale,
-                        fields: "userEnteredValue"
-                    }
-                });
-            });
-
-            const payload = {
-                guestName: guestName,
-                checkin: bookingData.checkin, 
-                checkout: bookingData.checkout,
-                dates: dates, 
-                row_start: rIntStart, 
-                row_sale: rSaleStart,
-                row_data: rData, 
-                json_internal: JSON.stringify({ requests: reqInt }),
-                json_sale: JSON.stringify({ requests: reqSale }),
-                orderCode: orderCode,
-                timestamp: new Date().toISOString()
-            };
-
-            const contentLen = (payload.billContent || "").length;
-            console.log("[SYNC-DEBUG] Payload Prepared:", payload);
 
             const GAS_URL = window.GAS_SYNC_URL;
             if (!GAS_URL) {
-                console.warn("[SYNC] GAS_URL (Make.com/Apps Script) not set.");
+                console.warn("[SYNC] GAS_URL not set.");
                 return;
             }
 
             const res = await fetch(GAS_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({ billText })
             });
-            console.log("[SYNC] Sent to Webhook. Success:", res.ok);
-            
-            // OPTIONAL: Clear session after confirm-info only if you want to prevent multiple syncs
-            // sessionStorage.removeItem('chonVillageSelectedRooms');
-            // sessionStorage.removeItem('chonVillageSelectedRoom');
+            console.log("[SYNC] Sent billText to Agent. Success:", res.ok);
+
+            if (res.ok) {
+                const data = await res.json().catch(() => ({}));
+                const tip = data.message || null;
+                if (tip && window.ChonAgent) window.ChonAgent.show(tip, 9000);
+            }
         } catch (err) {
             console.error("[SYNC] Error in syncToCalendarBridge:", err);
         }
