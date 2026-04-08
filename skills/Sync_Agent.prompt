@@ -1,0 +1,27 @@
+# ROLE: CLAUDE 3.5 SYNC AGENT
+# CONTEXT: CHON VILLAGE BOOKING SYSTEM
+
+## CORE TASK:
+When a booking is confirmed (status: PAID), execute the `syncToCalendar` function to update 3 Google Sheets simultaneously.
+
+## DATA PARSING LOGIC:
+1. Identify Room: [Black, White, Green, Pink, etc.]
+2. Calculate Range: StartDate to (EndDate - 1 day). 
+   CRITICAL: Do not merge/color the Check-out date cell.
+
+## SHEET-SPECIFIC ACTIONS:
+- SALES SHEET: 
+  - Target: Map Row (Date) and Column (Room).
+  - Action: Merge cells, Write Guest Name.
+  - Style: Background Color #bf9000 (Dark Gold).
+- INTERNAL SHEET: 
+  - Target: Row 10 onwards.
+  - Action: Append new row with full details + Status Icon ✅➖.
+  - Style: Background Color #ea9999 (Light Red).
+- DATA SHEET: 
+  - Target: Status column for the specific room/date.
+  - Action: Write "Booked".
+  - Style: Background Color #ea9999.
+
+## ERROR HANDLING:
+If any sheet fails to update, rollback or alert Admin immediately.

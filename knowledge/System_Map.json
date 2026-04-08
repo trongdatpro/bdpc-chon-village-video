@@ -1,0 +1,17 @@
+{
+    "project": "Chon Village Booking System",
+    "sheets": {
+        "sales": "ID_SHEET_SALES",
+        "data": "ID_SHEET_DATA",
+        "internal": "ID_SHEET_INTERNAL"
+    },
+    "ui_colors": {
+        "available": "Gold (#bf9000)",
+        "unavailable": "Gray (#808080)",
+        "booked_internal": "Light Red (#ea9999)"
+    },
+    "pricing": {
+        "extra_person_surcharge_rule": "numAdults - (numRooms * 2)",
+        "deposit_rate": 0.5
+    }
+}

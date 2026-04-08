@@ -224,7 +224,7 @@
             min-height: max(884px, 100dvh);
         }
     </style>
-    <link rel="stylesheet" href="ChonAgent.css">
+
 </head>
 
 <body class="bg-background-light dark:bg-background-dark font-sans text-graphite dark:text-slate-100">
@@ -307,16 +307,16 @@
         <main class="flex-1 pb-36">
             <div class="px-6 pb-2 pt-6 text-center flex flex-col items-center">
                 <!-- Message now ABOVE the divider, constrained for 2 lines on mobile -->
-                <div id="available-rooms-message" class="hidden mb-4 px-4 w-full max-w-[320px] sm:max-w-none">
+                <div id="available-rooms-message" class="hidden mb-1 px-4 w-full max-w-[320px] sm:max-w-none">
                     <p class="text-lg font-display text-primary italic text-center leading-tight">
                         Những phòng đang hiển thị là những phòng trống vào ngày bạn chọn.
                     </p>
                 </div>
-
-                <div class="flex items-center justify-center w-full max-w-sm mx-auto mb-6 opacity-70">
-                    <div class="h-px flex-1 bg-gradient-to-r from-transparent via-[#c8aa6a] to-[#c8aa6a]"></div>
-                    <div class="w-2.5 h-2.5 mx-2 border border-[#c8aa6a] rotate-45"></div>
-                    <div class="h-px flex-1 bg-gradient-to-l from-transparent via-[#c8aa6a] to-[#c8aa6a]"></div>
+                <!-- Diamond Divider -->
+                <div class="flex items-center justify-center my-2">
+                    <div class="w-24 h-px bg-gradient-to-r from-transparent via-[#c8aa6a]/40 to-[#c8aa6a]/40"></div>
+                    <div class="mx-3 w-2 h-2 border border-[#c8aa6a]/60 rotate-45"></div>
+                    <div class="w-24 h-px bg-gradient-to-l from-transparent via-[#c8aa6a]/40 to-[#c8aa6a]/40"></div>
                 </div>
             </div>
             <!-- Room Grid -->
@@ -345,7 +345,7 @@
         </main>
     </div>
 
-    <script src="rooms.js?v=11.16"></script>
+    <script src="rooms.js?v=11.20"></script>
 
     <!-- Floating Contact Buttons -->
     <!-- Floating Contact Action Button -->
@@ -420,16 +420,16 @@
 
     <!-- Edit Booking Modal -->
     <div id="edit-booking-modal"
-        class="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm hidden flex-col justify-center items-center opacity-0 transition-opacity duration-300 p-4"
+        class="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm hidden flex-col justify-center items-center opacity-0 transition-opacity duration-300 p-1"
         style="overscroll-behavior: none;">
-        <div class="bg-[#FFFFF5] rounded-2xl p-1 w-full max-w-[380px] transform transition-all duration-300 relative h-auto max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden"
+        <div class="bg-[#FFFFF5] rounded-2xl p-1 w-full max-w-[380px] transform transition-all duration-300 relative h-[96dvh] max-h-[98dvh] flex flex-col shadow-2xl overflow-hidden"
             id="edit-booking-content" style="border: 1px solid #c8a96a33;">
             <!-- Close Button moved inside -->
             <button id="close-modal-btn"
                 class="absolute top-2 right-2 p-1.5 text-graphite/40 hover:text-primary transition-colors z-[100]">
                 <span class="material-symbols-outlined text-xl">close</span>
             </button>
-            <div class="rococo-border bg-[#FFFFF5] pt-1 px-3 pb-5 flex flex-col items-center h-full">
+            <div class="rococo-border bg-[#FFFFF5] pt-1 px-3 pb-2 flex flex-col items-center h-full">
                 <!-- Acanthus Leaf Corners -->
                 <div class="acanthus-corner top-0 left-0">
                     <svg fill="currentColor" viewbox="0 0 100 100">
@@ -458,13 +458,13 @@
                 </h2>
 
                 <!-- Scrollable Content Area -->
-                <div class="w-full flex-1 overflow-y-auto scrollbar-hide px-1 pb-4">
+                <div class="w-full flex-1 overflow-y-auto scrollbar-hide px-1 pb-16">
                     <!-- Room Specific Calendar Container -->
                     <div id="modal-room-calendar" class="hidden w-full mb-1 overflow-x-auto pb-1 scrollbar-hide">
                         <!-- Calendar will be injected here -->
                     </div>
 
-                    <div class="w-full space-y-3">
+                    <div class="w-full space-y-1">
                         <!-- Dates -->
                         <div class="grid grid-cols-2 gap-3">
                             <div class="flex flex-col">
@@ -494,16 +494,10 @@
                         </div>
 
                         <!-- Content Section: Room Info (Top) -> Divider -> Guests (Bottom) -->
-                        <div class="space-y-3 pt-2">
-                            <!-- Decorative Divider -->
-                            <div class="diamond-divider modal-divider">
-                                <div class="diamond-line"></div>
-                                <div class="diamond-square"></div>
-                                <div class="diamond-line"></div>
-                            </div>
+                        <div class="w-full space-y-0.5 pt-0">
 
                             <!-- Room Info & Dynamic Pricing Section -->
-                            <div id="modal-room-details" class="hidden flex flex-row items-start gap-4 py-1 opacity-0 transition-opacity duration-300 w-full overflow-hidden">
+                            <div id="modal-room-details" class="hidden flex flex-row items-start gap-4 py-0 opacity-0 transition-opacity duration-300 w-full overflow-hidden">
                                 <!-- Left: Room Identity -->
                                 <div class="flex flex-col items-start shrink-0">
                                     <h4 id="modal-room-name" class="text-[10px] font-serif text-graphite uppercase tracking-[0.2em] mb-1 font-bold"></h4>
@@ -574,13 +568,13 @@
                     </div>
                 </div>
 
-                <div class="w-full mt-2 pt-1 relative pb-2 shrink-0">
+                <div class="w-full mt-1 pt-0 relative pb-0 shrink-0 flex flex-col items-center">
                     <button id="modal-save-btn"
-                        class="w-full bg-[#c8a96a] hover:bg-gradient-to-r hover:from-[#C8A96A] hover:via-[#E8D399] hover:to-[#C8A96A] hover:text-graphite text-[#FFFFF5] font-serif font-bold uppercase tracking-[0.2em] py-3 transition-all duration-500 text-sm shadow-xl flex items-center justify-center cursor-pointer border-none outline-none relative z-10">
+                        class="w-[85%] bg-[#c8a96a] hover:bg-gradient-to-r hover:from-[#C8A96A] hover:via-[#E8D399] hover:to-[#C8A96A] hover:text-graphite text-[#FFFFF5] font-serif font-bold uppercase tracking-[0.2em] py-2 rounded-lg transition-all duration-500 text-[13px] shadow-xl flex items-center justify-center cursor-pointer border-none outline-none relative z-10">
                         ĐỔI NGÀY
                     </button>
                     <!-- Warning -->
-                    <div class="mt-1.5 left-0 w-full pointer-events-none flex flex-col items-center">
+                    <div class="mt-2 left-0 w-full pointer-events-none flex flex-col items-center">
                         <p id="modal-booking-warning"
                             class="text-[9px] text-center font-bold italic leading-tight transition-all duration-300 text-[#8B4513] px-4">
                             Chồn ưu tiên nhận đặt phòng từ 2 đêm. Với đặt phòng 1 đêm, vui lòng liên hệ Zalo.
@@ -595,7 +589,7 @@
 
     <!-- Waitlist Footer (Raised to share line with bottom nav) -->
     <div id="waitlist-footer"
-        class="fixed bottom-[49.5px] left-0 w-full bg-[#FFFFF5]/90 backdrop-blur-lg z-[100] transform translate-y-full transition-transform duration-500 p-0 shadow-none border-b-0">
+        class="fixed bottom-[50px] left-0 w-full bg-[#FFFFF5]/90 backdrop-blur-lg z-[100] transform translate-y-full transition-transform duration-500 p-0 shadow-none border-b-0">
         <div class="max-w-4xl mx-auto relative p-0.5">
             <!-- Rococo Border Wrapper (Bottom border removed to share with nav) -->
             <div class="rococo-border bg-[#FFFFF5]/40 p-2 sm:p-3 flex flex-col items-center gap-2 relative border-b-none-all shadow-2xl">
@@ -645,6 +639,12 @@
             </div>
         </div>
         <style>
+            #confirm-waitlist-btn, #modal-save-btn {
+                touch-action: none !important;
+                -webkit-user-select: none !important;
+                user-select: none !important;
+                -webkit-tap-highlight-color: transparent !important;
+            }
             .no-scrollbar::-webkit-scrollbar,
             .scrollbar-hide::-webkit-scrollbar {
                 display: none;
@@ -692,7 +692,7 @@
     </nav>
 
     <script src="history-bubble.js"></script>
-    <script src="ChonAgent.js"></script>
+
     <!-- Fly Animation Container -->
     <div id="fly-container" class="fixed inset-0 pointer-events-none z-[300]"></div>
 </body>

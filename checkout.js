@@ -24,22 +24,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // 3. Retrieve Data From Session
-    const bookingDataStr = sessionStorage.getItem('chonVillageBooking');
-    const selectedRoomsStr = sessionStorage.getItem('chonVillageSelectedRooms');
-    const selectedRoomStr = sessionStorage.getItem('chonVillageSelectedRoom');
+    let bookingData = {};
+    let roomsData = [];
 
-    if (!bookingDataStr || (!selectedRoomsStr && !selectedRoomStr)) {
-        console.warn("Booking data not found in session, redirecting...");
-        window.location.href = 'index.html';
+    try {
+        const bookingDataStr = sessionStorage.getItem('chonVillageBooking');
+        const selectedRoomsStr = sessionStorage.getItem('chonVillageSelectedRooms');
+        const selectedRoomStr = sessionStorage.getItem('chonVillageSelectedRoom');
+
+        if (!bookingDataStr) throw new Error("Missing booking data");
+        bookingData = JSON.parse(bookingDataStr);
+
+        if (selectedRoomsStr) {
+            roomsData = JSON.parse(selectedRoomsStr);
+        } else if (selectedRoomStr) {
+            roomsData = [JSON.parse(selectedRoomStr)];
+        }
+
+        if (!roomsData || roomsData.length === 0) throw new Error("No rooms selected");
+
+        console.log("Check-out Data Loaded:", {
+            booking: bookingData,
+            rooms: roomsData
+        });
+    } catch (err) {
+        console.error("Critical error loading session data:", err);
+        alert("Thông tin đặt phòng không còn tồn tại. Vui lòng chọn lại phòng.");
+        window.location.href = 'rooms.html';
         return;
     }
-
-    const bookingData = JSON.parse(bookingDataStr);
-    const roomsData = selectedRoomsStr ? JSON.parse(selectedRoomsStr) : [JSON.parse(selectedRoomStr)];
-    const adultsCount = parseInt(bookingData.adults) || 2;
-
-    console.log("Booking Data:", bookingData);
-    console.log("Rooms Data:", roomsData);
 
     // 3. Date Formatting
     const parseLocal = (dateStr) => {
@@ -56,71 +69,50 @@ document.addEventListener('DOMContentLoaded', () => {
     const formatDateObj = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
     const dateRangeStr = `${formatDateObj(checkinDate)} - ${formatDateObj(checkoutDate)} (${nights} \u0111\u00eam)`;
 
-    // 4. Pricing & Surcharge Logic
-    let baseRoomTotal = 0;
-    const surchargeRates = [];
+    // 4. Pricing & Surcharge Logic (Optimized for suggestion dates)
+    let grandTotalAmount = 0;
     const roomsWithTotals = [];
 
-    roomsData.forEach(room => {
-        const roomBasePrice = parseInt(room.baseRoomTotal) || 0;
-        baseRoomTotal += roomBasePrice;
-
-        // SPECIAL RULE: If stay >= 3 nights (4 days 3 nights), 
-        // use standard surcharge (we take the first night's surcharge as "standard" 
-        // or fallback to 450k). 
-        // If < 3 nights, we use the specific surcharge passed.
-        let rate = parseInt(room.surcharge) || 450000;
-
-        // Note: The prompt says "hiển thị giá phụ thu ngưá»i thứ 3 của ngày thưá»ng nếu khách đặt từ 4 ngày 3 \u0111\u00eam"
-        // In this implementation, room.nights is passed from rooms.js.
-        if (room.nights >= 3) {
-            console.log(`[DEBUG] Stay is ${room.nights} nights (>= 3). Using standard surcharge rate.`);
-            // Assuming the passed room.surcharge is the standard rate if rooms.js passed datesToStay[0]'s surcharge
+    roomsData.forEach((room, index) => {
+        // 1. Dữ liệu dự phòng (Fallback) nếu totalPrice bị mất hoặc không hợp lệ
+        let roomFinalPrice = parseInt(room.totalPrice);
+        
+        if (isNaN(roomFinalPrice) || roomFinalPrice <= 0) {
+            console.warn(`[CHECKOUT] Room ${index} (${room.name}) has invalid totalPrice: ${room.totalPrice}. Recalculating...`);
+            
+            // Tính lại dựa trên cơ sở: (Giá phòng gốc) + (Phụ thu người lớn thứ 3 nếu có)
+            const basePrice = parseInt(room.baseRoomTotal) || parseInt(room.totalPrice) || 800000;
+            const surchargeRate = parseInt(room.surcharge) || 450000;
+            const guestCount = parseInt(room.adults) || parseInt(bookingData.adults) || 2;
+            const stayNights = parseInt(room.nights) || nights || 1;
+            
+            // Nếu là số cũ chưa tính phụ thu, tính thêm vào đây
+            const extraAdults = Math.max(0, guestCount - 2);
+            roomFinalPrice = basePrice + (extraAdults * surchargeRate * stayNights);
+            
+            console.log(`[CHECKOUT] Fallback price for ${room.name}: ${roomFinalPrice}`);
         }
 
-        surchargeRates.push(rate);
+        grandTotalAmount += roomFinalPrice;
+
+        // Parse individual room dates (Sử dụng ngày cụ thể của phòng, nếu không có lấy ngày chung của booking)
+        const rInStr = room.checkin || bookingData.checkin;
+        const rOutStr = room.checkout || bookingData.checkout;
+        const rIn = parseLocal(rInStr);
+        const rOut = parseLocal(rOutStr);
+        const rDiff = Math.abs(rOut - rIn);
+        const rNights = Math.ceil(rDiff / (1000 * 60 * 60 * 24)) || 1;
 
         roomsWithTotals.push({
             ...room,
-            basePrice: roomBasePrice,
-            surchargeAllocated: 0,
-            surchargePerNight: 0,
-            total: roomBasePrice
+            checkinDate: rIn,
+            checkoutDate: rOut,
+            nights: rNights,
+            total: roomFinalPrice
         });
     });
 
-    // Calculate Extra Guests (3rd person in shared rooms)
-    const extraGuestsCount = Math.max(0, adultsCount - (roomsData.length * 2));
-
-    // Sort logic for surcharge application
-    const sortedRates = [...surchargeRates].sort((a, b) => a - b);
-    let totalSurchargePerNight = 0;
-
-    if (roomsData.length === 3) {
-        const uniqueRates = new Set(sortedRates).size;
-        if (extraGuestsCount === 1) {
-            totalSurchargePerNight = (uniqueRates === 3) ? sortedRates[1] : sortedRates[0];
-        } else if (extraGuestsCount === 2) {
-            totalSurchargePerNight = sortedRates[0] + sortedRates[1];
-        } else {
-            for (let i = 0; i < extraGuestsCount; i++) totalSurchargePerNight += sortedRates[i] || sortedRates[0];
-        }
-    } else {
-        for (let i = 0; i < extraGuestsCount; i++) totalSurchargePerNight += sortedRates[i] || sortedRates[0];
-    }
-
-    const grandSurchargeTotal = totalSurchargePerNight * nights;
-    const grandTotalAmount = baseRoomTotal + grandSurchargeTotal;
     const depositAmount = Math.floor(grandTotalAmount / 2);
-
-    // Allocate surcharge proportionally to rooms for the UI cards
-    if (grandSurchargeTotal > 0) {
-        roomsWithTotals.forEach((room) => {
-            room.surchargeAllocated = (grandSurchargeTotal / roomsWithTotals.length);
-            room.surchargePerNight = (totalSurchargePerNight / roomsWithTotals.length);
-            room.total = room.basePrice + room.surchargeAllocated;
-        });
-    }
 
     // 5. Populate UI Elements
     const roomsListContainer = document.getElementById('checkout-rooms-list');
@@ -134,27 +126,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     <h3 class="text-2xl font-serif font-bold mb-4 text-black border-b-2 border-primary/30 pb-3">${room.name}</h3>
                     <div class="space-y-4">
                         <div class="flex flex-col gap-0.5">
-                            <span class="text-black text-sm font-medium italic">Th\u1eddi gian:</span>
-                            <span class="text-black text-sm font-bold leading-tight">Ngày Nhận ${formatDateObj(checkinDate)} - Ngày Trả ${formatDateObj(checkoutDate)} - ${nights + 1} ngày ${nights} \u0111\u00eam</span>
+                            <span class="text-black text-sm font-medium italic">Ngày Nhận ${formatDateObj(room.checkinDate)} - Ngày Trả ${formatDateObj(room.checkoutDate)} - ${room.nights + 1} ngày ${room.nights} đêm</span>
                         </div>
                         <div class="flex flex-col gap-2 py-4 border-b-2 border-t-2 border-dashed border-primary/40">
-                            <span class="text-black text-sm uppercase tracking-wider font-bold">Chi ti\u1ebft gi\u00e1:</span>
+                            <span class="text-black text-sm uppercase tracking-wider font-bold">Giá Phòng trọn gói:</span>
                             <div class="space-y-3">
                                 <div class="flex flex-col text-sm">
-                                    ${room.nightlyDetails ? room.nightlyDetails.map(n => {
-                const label = n.isHoliday ? "Giá Lễ" : "Giá Ngày";
-                return `<span class="text-black font-bold mt-0.5">${label} ${n.date} : ${renderCurrency(n.price)} / 1 \u0110\u00eam</span>`;
-            }).join('') : (room.groupedNights ? room.groupedNights.map(group => {
-                const dateLabel = group.count > 1
-                    ? `Giá Ngày ${group.startDate}-${group.endDate} :`
-                    : `Giá ${group.isHoliday ? 'Ngày Lễ ' : 'Ngày '}${group.startDate} :`;
-                return `<span class="text-black font-bold mt-0.5">${dateLabel} ${renderCurrency(group.price)} / 1 \u0110\u00eam</span>`;
-            }).join('') : `<span class="text-black font-bold mt-0.5">Giá phòng: ${renderCurrency(room.basePrice)}</span>`)}
+                                    <span class="text-black font-bold mt-0.5">Tổng cộng cho ${room.nights} đêm: ${renderCurrency(room.total)}</span>
                                 </div>
-                                ${room.surchargeAllocated > 0 ? `
-                                <div class="flex flex-col text-sm">
-                                    <span class="text-black font-bold mt-0.5">Phụ thu: ${renderCurrency(room.surchargeAllocated)}</span>
-                                </div>` : ''}
                             </div>
                         </div>
                         <div class="flex justify-between items-center pt-2 text-primary font-bold">
@@ -224,26 +203,42 @@ document.addEventListener('DOMContentLoaded', () => {
             const storedBill = sessionStorage.getItem('chonVillageLastBill') || "";
             const billText = lastGeneratedBillText || storedBill || "BILL_MISSING";
 
+            console.log("[SYNC] billText length:", billText.length);
+            console.log("[SYNC] billText preview:", billText.substring(0, 200));
+
+            if (billText === "BILL_MISSING") {
+                console.error("[SYNC] Không có bill để sync!");
+                return;
+            }
+
             const GAS_URL = window.GAS_SYNC_URL;
             if (!GAS_URL) {
                 console.warn("[SYNC] GAS_URL not set.");
                 return;
             }
 
+            console.log("[SYNC] Đang gửi dữ liệu đồng bộ lên Server...");
             const res = await fetch(GAS_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ billText })
+                body: JSON.stringify({ 
+                    billText,
+                    bookingData, // Gửi kèm dữ liệu cấu trúc để không cần dùng AI parse lại
+                    roomsData
+                })
             });
-            console.log("[SYNC] Sent billText to Agent. Success:", res.ok);
 
-            if (res.ok) {
-                const data = await res.json().catch(() => ({}));
-                const tip = data.message || null;
-                if (tip && window.ChonAgent) window.ChonAgent.show(tip, 9000);
+            console.log("[SYNC] Response status:", res.status, res.ok);
+            const data = await res.json().catch(() => ({}));
+            console.log("[SYNC] Response data:", JSON.stringify(data));
+
+            if (res.ok && data.success) {
+                console.log("[SYNC] ✅ Đồng bộ 3 lịch thành công!");
+            } else {
+                console.error("[SYNC] ❌ Sync thất bại:", data.message || "Không rõ lỗi");
             }
         } catch (err) {
-            console.error("[SYNC] Error in syncToCalendarBridge:", err);
+            console.error("[SYNC] ❌ Lỗi kết nối:", err.message);
         }
     }
 
@@ -283,18 +278,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 const apiBase = (window.location.protocol === 'file:') ? 'http://localhost:3000' : '';
                 console.log("[API] Using base:", apiBase || '(relative)');
 
-                // Show Summary & Payment
+                // 1. Show Summary & Payment IMMEDIATELY (Before API Delay)
                 if (summarySection) {
                     summarySection.classList.remove('hidden');
-                    setTimeout(() => summarySection.classList.remove('opacity-0'), 10);
+                    // Instant visibility for better UX
+                    summarySection.classList.remove('opacity-0');
+                    summarySection.style.opacity = '1';
                 }
                 if (paymentSection) {
                     paymentSection.classList.remove('hidden');
-                    setTimeout(() => paymentSection.classList.remove('opacity-0'), 10);
+                    paymentSection.classList.remove('opacity-0');
+                    paymentSection.style.opacity = '1';
+                }
 
+                // 2. Clear previous errors or states if any
+                const qrLoading = document.getElementById('qr-loading');
+                const qrImg = document.getElementById('checkout-qr');
+                if (qrLoading) qrLoading.classList.remove('hidden');
+                if (qrImg) qrImg.classList.add('hidden');
+
+                // 3. Zero-Delay Scroll (Optimized)
+                setTimeout(() => {
+                    const targetEl = summarySection || paymentSection;
+                    if (targetEl) {
+                        const header = document.querySelector('header');
+                        const headerHeight = header ? header.offsetHeight : 80;
+                        const offsetPosition = targetEl.getBoundingClientRect().top + window.pageYOffset - headerHeight - 20;
+                        window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
+                    }
+                }, 100);
+
+                if (paymentSection) {
                     // Populate basic info
-                    const qrLoading = document.getElementById('qr-loading');
-                    const depositAmountEl = document.getElementById('checkout-deposit-amount');
+                    const depositAmountEl = document.getElementById('checkout-deposit');
                     if (depositAmountEl) depositAmountEl.textContent = renderCurrency(depositAmount);
 
                     // Call PayOS Backend Automatically
@@ -328,8 +344,21 @@ document.addEventListener('DOMContentLoaded', () => {
                                 qrImg.src = brandedQrUrl;
 
                                 qrImg.onload = () => {
+                                    console.log("QR Image loaded successfully");
                                     qrImg.classList.remove('hidden');
                                     if (qrLoading) qrLoading.classList.add('hidden');
+                                };
+                                qrImg.onerror = () => {
+                                    console.error("QR Image failed to load");
+                                    if (qrLoading) {
+                                        qrLoading.innerHTML = `
+                                            <div class="flex flex-col items-center gap-2">
+                                                <span class="material-symbols-outlined text-red-500 text-3xl">broken_image</span>
+                                                <span class="text-[10px] text-red-500 font-bold uppercase tracking-tight">Lỗi Tải Mã VietQR</span>
+                                                <button onclick="window.location.reload()" class="text-[9px] underline text-primary">Thử tải lại trang</button>
+                                            </div>
+                                        `;
+                                    }
                                 };
                             }
                             if (accountNoEl) accountNoEl.textContent = payosData.accountNumber;
@@ -513,7 +542,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                         topGrid.innerHTML = topBanks.map(bank => `
                                             <button onclick="selectBankDirect('${bank.id}')" class="flex flex-col items-center gap-2 p-3 bg-primary/5 border border-primary/20 rounded-xl hover:bg-primary/10 transition-all active:scale-95 group">
                                                 <div class="w-10 h-10 bg-white rounded-lg shadow-sm flex items-center justify-center overflow-hidden border border-primary/10 p-1">
-                                                    <img src="https://api.vietqr.io/img/${bank.id.toUpperCase()}.png" alt="${bank.name}" class="w-full h-full object-contain" />
+                                                    <img src="https://api.vietqr.io/img/${bank.id.toUpperCase()}.png" alt="${bank.name}" class="w-full h-full object-contain" onerror="this.src='https://img.vietqr.io/image/${bank.id}-logo.png'" />
                                                 </div>
                                                 <span class="text-[9px] font-bold text-primary uppercase text-center truncate w-full">${bank.name}</span>
                                             </button>
@@ -527,7 +556,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                         resultsList.innerHTML = filtered.map(bank => `
                                             <button onclick="selectBankDirect('${bank.id}')" class="w-full flex items-center gap-4 p-3 hover:bg-primary/10 rounded-xl transition-all active:scale-[0.98] border-b border-primary/5 group">
                                                 <div class="w-8 h-8 bg-white rounded-lg shadow-sm flex items-center justify-center overflow-hidden border border-primary/10 p-0.5">
-                                                    <img src="https://api.vietqr.io/img/${bank.id.toUpperCase()}.png" alt="${bank.name}" class="w-full h-full object-contain" />
+                                                    <img src="https://api.vietqr.io/img/${bank.id.toUpperCase()}.png" alt="${bank.name}" class="w-full h-full object-contain" onerror="this.src='https://img.vietqr.io/image/${bank.id}-logo.png'" />
                                                 </div>
                                                 <span class="text-xs font-bold text-primary/80 group-hover:text-primary transition-colors">${bank.name}</span>
                                                 <span class="material-symbols-outlined ml-auto text-primary/30 text-sm">chevron_right</span>
@@ -570,14 +599,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             `;
                         }
                     }
-                }
-
-                // Zero-Delay Scroll (Optimized)
-                if (summarySection) {
-                    const header = document.querySelector('header');
-                    const headerHeight = header ? header.offsetHeight : 80;
-                    const offsetPosition = summarySection.getBoundingClientRect().top + window.pageYOffset - headerHeight - 20;
-                    window.scrollTo({ top: offsetPosition, behavior: 'instant' });
                 }
             } else {
                 // Hide Sections
@@ -649,7 +670,7 @@ document.addEventListener('DOMContentLoaded', () => {
         pollingInterval = setInterval(async () => {
             const result = await checkStatusOnce(orderCode);
             if (result && result.paid && statusText) {
-                statusText.textContent = "Äã nhận thanh toán!";
+                statusText.textContent = "Đã nhận thanh toán!";
             } else if (result && result.status === 'CANCELLED') {
                 if (statusText) statusText.textContent = "Giao dịch đã bị hủy.";
                 clearInterval(pollingInterval);
@@ -669,11 +690,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Manual Check Button
         if (manualBtn) {
             manualBtn.onclick = async () => {
-                manualBtn.textContent = "Äang kiểm tra...";
+                manualBtn.textContent = "Đang kiểm tra...";
                 const result = await checkStatusOnce(orderCode);
 
                 if (result && result.paid) {
-                    manualBtn.textContent = "Äã nhận thanh toán!";
+                    manualBtn.textContent = "Đã nhận thanh toán!";
                     // Success transition is handled inside checkStatusOnce
                 } else {
                     const statusTextStr = (result && result.status) ? result.status : "Lỗi";
@@ -721,7 +742,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const phone = guestZaloInput ? guestZaloInput.value.trim() : "Chưa cung cấp";
 
             if (!name || name === "Quý khách") {
-                alert("Vui lòng nhập tên ngưá»i đặt phòng.");
+                alert("Vui lòng nhập tên người đặt phòng.");
                 return;
             }
 
@@ -733,6 +754,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // PERSIST FOR HISTORY (Image 1 logic)
             sessionStorage.setItem('chonVillageLastBooking', JSON.stringify({
                 billText: billText,
+                roomIds: roomsWithTotals.map(r => String(r.id)),
                 timestamp: Date.now()
             }));
 
@@ -759,25 +781,62 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const generateBillText = (name, zalo) => {
+        // Format ISO date string directly: YYYY-MM-DD -> DD/MM/YYYY (no Date object, no timezone issues)
+        const fmtDate = (isoStr) => {
+            if (!isoStr) return '??/??/????';
+            const s = String(isoStr).split('T')[0];
+            const p = s.split('-');
+            return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : isoStr;
+        };
+
+        const ciISO = (typeof bookingData !== 'undefined' && bookingData.checkin) ? bookingData.checkin : '';
+        const coISO = (typeof bookingData !== 'undefined' && bookingData.checkout) ? bookingData.checkout : '';
+        const checkinFull = fmtDate(ciISO);
+        const checkoutFull = fmtDate(coISO);
+
         const currentTotal = typeof grandTotalAmount !== 'undefined' ? grandTotalAmount : 0;
         const currentDeposit = typeof depositAmount !== 'undefined' ? depositAmount : 0;
         const remaining = currentTotal - currentDeposit;
         const nightsCount = typeof nights !== 'undefined' ? nights : 1;
-        const nightsStr = nightsCount >= 3 ? `${nightsCount} \u0111\u00eam (${nightsCount + 1} ng\u00e0y)` : `${nightsCount} \u0111\u00eam`;
+        const nightsStr = nightsCount >= 3 ? nightsCount + ' đêm (' + (nightsCount + 1) + ' ngày)' : nightsCount + ' đêm';
 
-        const inDate = typeof checkinDate !== 'undefined' ? checkinDate : new Date();
-        const outDate = typeof checkoutDate !== 'undefined' ? checkoutDate : new Date();
-        const rData = typeof roomsData !== 'undefined' ? roomsData : [];
-        const roomsStr = rData.map(r => r.name).join(', ');
+        const roomsStr = roomsWithTotals.map(r => r.name).join(', ');
 
-        const adults = typeof adultsCount !== 'undefined' ? adultsCount : 2;
-        const children = (bookingData && bookingData.children) ? parseInt(bookingData.children) : 0;
-        const childrenAges = (bookingData && bookingData.childrenAgeCategory) ? bookingData.childrenAgeCategory.split(',').filter(a => a) : [];
+        const adults = (typeof bookingData !== 'undefined' && bookingData.adults) ? parseInt(bookingData.adults) : 2;
+        const children = (typeof bookingData !== 'undefined' && bookingData.children) ? parseInt(bookingData.children) : 0;
+        const childrenAges = (typeof bookingData !== 'undefined' && bookingData.childrenAgeCategory) ? bookingData.childrenAgeCategory.split(',').filter(a => a) : [];
 
-        let guestStr = `${adults} ng\u01b0\u1eddi l\u1edbn`;
-        if (children > 0) guestStr += `, ${children} tr\u1ebb em (${childrenAges.join(', ')} tu\u1ed5i)`;
+        let guestStr = adults + ' người lớn';
+        if (children > 0) guestStr += ', ' + children + ' trẻ em (' + childrenAges.join(', ') + ' tuổi)';
 
-        return `BILL X\u00c1C NH\u1eacN \u0110\u1eb6T PH\u00d2NG \n\n\u2796 TH\u00d4NG TIN\n- \u0110\u1ecba ch\u1ec9: 07 Th\u00e1nh T\u00e2m - Ph\u01b0\u1eddng 5, Tp. \u0110\u00e0 L\u1ea1t\nhttps://maps.app.goo.gl/aW824oYN5dznY7JX9?g_st=com.google.maps.preview.copy\n- Li\u00ean h\u1ec7 nh\u1eadn ph\u00f2ng : 0889717713 (Mr. Tr\u1ecdng \u0110\u1ea1t)\n- H\u00ecnh th\u1ee9c thu\u00ea: ${roomsStr}\n\n\u2796 TH\u00d4NG TIN KH\u00c1CH \n- T\u00ean kh\u00e1ch h\u00e0ng : ${name}\n- S\u1ed1 \u0111i\u1ec7n tho\u1ea1i : ${zalo}\n- S\u1ed1 ng\u01b0\u1eddi: ${guestStr}\n- S\u1ed1 ng\u00e0y thu\u00ea: ${nightsStr}\n* Ng\u00e0y nh\u1eadn nh\u00e0: 14h00 ng\u00e0y ${formatDateObj(inDate)}\n* Ng\u00e0y tr\u1ea3 nh\u00e0: 12h00 ng\u00e0y ${formatDateObj(outDate)}\n\n\u2705 THANH TO\u00c1N\n- Th\u00e0nh ti\u1ec1n: ${renderCurrency(currentTotal)}\n- \u0110\u1eb7t c\u1ecdc: ${renderCurrency(currentDeposit)}\n( X\u00e1c nh\u1eadn \u0111\u00e3 nh\u1eadn \u0111\u01b0\u1ee3c ti\u1ec1n c\u1ecdc )\n- C\u00f2n l\u1ea1i: ${renderCurrency(remaining)}\nS\u1ed1 ti\u1ec1n c\u00f2n l\u1ea1i qu\u00fd kh\u00e1ch vui l\u00f2ng thanh to\u00e1n h\u1ebft ngay sau khi nh\u1eadn nh\u00e0\n\n\u2796 GHI CH\u00da\n- Qu\u00fd kh\u00e1ch vui l\u00f2ng t\u1ef1 b\u1ea3o v\u1ec7 tài sản cá nhân, mọi mất mát bên home không chịu trách nhiệm. \n- Booking không hoàn, huỷ, đổi dưới mọi hình thức. \n- Qu\u00fd khách vui lòng đem theo CMND hoặc Passport để làm thủ tục đăng ký lưu trú.\n- Qu\u00fd khách vui lòng đi đúng số lượng người, nếu có phát sinh phụ thu.`;
+        return `BILL XÁC NHẬN ĐẶT PHÒNG 
+
+➖ THÔNG TIN
+- Địa chỉ: 07 Thánh Tâm - Phường 5, Tp. Đà Lạt
+https://maps.app.goo.gl/aW824oYN5dznY7JX9?g_st=com.google.maps.preview.copy
+- Liên hệ nhận phòng : 0889717713 (Mr. Trọng Đạt)
+- Hình thức thuê: ${roomsStr}
+
+➖ THÔNG TIN KHÁCH 
+- Tên khách hàng : ${name}
+- Số điện thoại : ${zalo}
+- Số người: ${guestStr}
+- Số ngày thuê: ${nightsStr}
+* Ngày nhận nhà: 14h00 ngày ${checkinFull}
+* Ngày trả nhà: 12h00 ngày ${checkoutFull}
+
+✅ THANH TOÁN
+- Thành tiền: ${renderCurrency(currentTotal)}
+- Đặt cọc: ${renderCurrency(currentDeposit)}
+( Xác nhận đã nhận được tiền cọc )
+- Còn lại: ${renderCurrency(remaining)}
+Số tiền còn lại quý khách vui lòng thanh toán hết ngay sau khi nhận nhà
+
+➖ GHI CHÚ
+- Quý khách vui lòng tự bảo vệ tài sản cá nhân, mọi mất mát bên home không chịu trách nhiệm. 
+- Booking không hoàn, huỷ, đổi dưới mọi hình thức. 
+- Quý khách vui lòng đem theo CMND hoặc Passport để làm thủ tục đăng ký lưu trú.
+- Quý khách vui lòng đi đúng số lượng người, nếu có phát sinh phụ thu.`;
     };
 
     // Helper for non-secure contexts
@@ -808,7 +867,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const triggerSuccess = () => {
                 const originalText = sendBillZaloBtn.innerHTML;
-                sendBillZaloBtn.innerHTML = '<span class="material-symbols-outlined text-sm">check</span><span>Báº¢N Gá»C ÄÃƒ CHÃ‰P & ÄANG Má»ž ZALO...</span>';
+                sendBillZaloBtn.innerHTML = '<span class="material-symbols-outlined text-sm">check</span><span>BẢN GỐC ĐÃ CHÉP & ĐANG MỞ ZALO...</span>';
                 setTimeout(() => { sendBillZaloBtn.innerHTML = originalText; }, 3000);
             };
 

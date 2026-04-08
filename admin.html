@@ -119,6 +119,11 @@
         .msg.bot { background: rgba(255, 255, 255, 0.1); align-self: flex-start; border-bottom-left-radius: 2px; }
         .msg.user { background: var(--primary); align-self: flex-end; border-bottom-right-radius: 2px; }
 
+        .bill-wrapper { align-self: flex-start; max-width: 90%; display: flex; flex-direction: column; gap: 8px; }
+        .msg.bill { white-space: pre-wrap; font-size: 0.85rem; line-height: 1.6; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 200, 100, 0.3); }
+        .copy-btn { padding: 10px; border-radius: 10px; border: none; background: linear-gradient(45deg, var(--primary), var(--secondary)); color: white; font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 0.9rem; }
+        .copy-btn:hover { opacity: 0.85; transform: translateY(-1px); }
+
         .chat-input-area { display: flex; gap: 10px; }
         .chat-input-area input {
             flex: 1;
@@ -236,9 +241,16 @@
                     body: JSON.stringify({ messages: adminChatHistory })
                 });
                 const data = await res.json();
-                const reply = res.ok ? data.reply : (data.error || 'Lỗi server');
-                addChatMessage(reply, "bot");
-                adminChatHistory.push({ role: 'assistant', content: reply });
+                if (!res.ok) {
+                    addChatMessage(data.error || 'Lỗi server', "bot");
+                    return;
+                }
+                if (data.isBill) {
+                    addBillMessage(data.reply);
+                } else {
+                    addChatMessage(data.reply, "bot");
+                }
+                adminChatHistory.push({ role: 'assistant', content: data.reply });
             } catch (err) {
                 addChatMessage("Chồn đang bị nghẹn, ní thử lại sau nhé!", "bot");
             }
@@ -250,6 +262,32 @@
             div.className = `msg ${sender}`;
             div.innerText = text;
             box.appendChild(div);
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function addBillMessage(billText) {
+            const box = document.getElementById('chatBox');
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'bill-wrapper';
+
+            const billDiv = document.createElement('div');
+            billDiv.className = 'msg bill';
+            billDiv.innerText = billText;
+
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'copy-btn';
+            copyBtn.innerText = '📋 Copy Bill';
+            copyBtn.onclick = () => {
+                navigator.clipboard.writeText(billText).then(() => {
+                    copyBtn.innerText = '✅ Đã copy! Dán vào Zalo ngay nhé ní!';
+                    setTimeout(() => { copyBtn.innerText = '📋 Copy Bill'; }, 2500);
+                });
+            };
+
+            wrapper.appendChild(billDiv);
+            wrapper.appendChild(copyBtn);
+            box.appendChild(wrapper);
             box.scrollTop = box.scrollHeight;
         }
     </script>
