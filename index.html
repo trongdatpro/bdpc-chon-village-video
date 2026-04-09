@@ -131,6 +131,73 @@
 </head>
 
 <body class="bg-[#1a1a1a] font-display text-graphite">
+    <!-- Premium Global Header (Index) -->
+    <header id="header-bar" class="fixed top-0 left-0 w-full h-[80px] bg-[#FAF6EC]/90 backdrop-blur-md z-[100] border-b border-[#C8A96A]/10 transition-all duration-300 opacity-0 pointer-events-none">
+        <div class="relative w-full h-full max-w-[1400px] mx-auto px-4 flex items-center justify-between">
+            <!-- Header Title -->
+            <div id="header-title-container"
+                class="absolute left-1/2 -translate-x-1/2 flex flex-col items-center justify-center transition-all duration-500 pointer-events-none">
+                <img id="header-decor-top" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDtJ66kID3y6mZlO4YfV2Y5Z0lE4X9Rz8D1jS2H3G4F5E6D7C8B9A0A" 
+                    class="opacity-0 w-0 transition-all duration-500" alt="decor">
+                <h1 id="header-title" class="font-display text-[32px] font-bold text-primary tracking-widest transition-all duration-500 whitespace-nowrap">
+                    Chồn Village
+                </h1>
+                <img id="header-decor-bottom" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDtJ66kID3y6mZlO4YfV2Y5Z0lE4X9Rz8D1jS2H3G4F5E6D7C8B9A0A" 
+                    class="opacity-0 w-0 transition-all duration-500 rotate-180" alt="decor">
+            </div>
+        </div>
+    </header>
+
+    <script>
+        // Inline Header logic for Home Page
+        document.addEventListener('DOMContentLoaded', () => {
+            const headerBar = document.getElementById('header-bar');
+            const headerTitleContainer = document.getElementById('header-title-container');
+            const headerTitle = document.getElementById('header-title');
+            const headerDecorTop = document.getElementById('header-decor-top');
+            const headerDecorBottom = document.getElementById('header-decor-bottom');
+            
+            window.addEventListener('scroll', () => {
+                const isScrolled = window.scrollY > 20;
+                if (isScrolled) {
+                    headerBar.classList.remove('opacity-0', 'pointer-events-none');
+                    headerBar.classList.add('opacity-100');
+                    
+                    headerTitleContainer.classList.replace('left-1/2', 'left-4');
+                    headerTitleContainer.classList.remove('-translate-x-1/2');
+                    
+                    headerTitle.classList.replace('text-[32px]', 'text-[25px]');
+                    
+                    if (headerDecorTop) {
+                        headerDecorTop.classList.remove('opacity-0');
+                        headerDecorTop.style.width = '140px';
+                    }
+                    if (headerDecorBottom) {
+                        headerDecorBottom.classList.remove('opacity-0');
+                        headerDecorBottom.style.width = '140px';
+                    }
+                } else {
+                    headerBar.classList.add('opacity-0', 'pointer-events-none');
+                    headerBar.classList.remove('opacity-100');
+                    
+                    headerTitleContainer.classList.replace('left-4', 'left-1/2');
+                    headerTitleContainer.classList.add('-translate-x-1/2');
+                    
+                    headerTitle.classList.replace('text-[25px]', 'text-[32px]');
+                    
+                    if (headerDecorTop) {
+                        headerDecorTop.classList.add('opacity-0');
+                        headerDecorTop.style.width = '0';
+                    }
+                    if (headerDecorBottom) {
+                        headerDecorBottom.classList.add('opacity-0');
+                        headerDecorBottom.style.width = '0';
+                    }
+                }
+            });
+        });
+    </script>
+
     <!-- Full Screen Background Overlay -->
     <div class="relative min-h-screen w-full flex items-center justify-center p-4 pb-24 overflow-hidden">
         <!-- Blurred Backdrop Image -->

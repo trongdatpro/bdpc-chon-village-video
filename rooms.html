@@ -230,8 +230,8 @@
 <body class="bg-background-light dark:bg-background-dark font-sans text-graphite dark:text-slate-100">
     <div class="relative flex min-h-screen w-full flex-col">
         <!-- Header -->
-        <header id="main-header"
-            class="flex items-center relative h-[60px] w-full border-b border-primary/20 bg-background-light/80 backdrop-blur-md sticky top-0 z-50">
+        <header id="header-bar"
+            class="flex items-center relative h-[80px] w-full border-b border-primary/20 bg-background-light/80 backdrop-blur-md sticky top-0 z-50">
             <div id="header-title-container"
                 class="absolute top-1/2 -translate-y-1/2 mt-2 left-1/2 -translate-x-1/2 transition-all duration-500 w-max flex flex-col items-center justify-center pointer-events-none">
 
@@ -244,39 +244,32 @@
                 </div>
 
                 <h1 id="header-title"
-                    class="font-display text-[28px] font-bold tracking-tight text-graphite transition-all duration-500 pointer-events-auto">
+                    class="font-display text-[32px] font-bold tracking-tight text-graphite transition-all duration-500 pointer-events-auto">
                     Chồn Village
                 </h1>
 
                 <!-- Bottom Decorative Line (Hidden initially, shows when scrolled) -->
                 <div id="header-decor-bottom"
-                    class="flex items-center justify-center w-full max-w-[120px] opacity-0 transition-opacity duration-500 pt-0.5 pointer-events-none">
+                    class="flex items-center justify-center w-0 opacity-0 transition-all duration-500 pt-0.5 pointer-events-none overflow-hidden">
                     <div class="h-[0.5px] flex-1 bg-gradient-to-r from-transparent via-[#c8aa6a] to-[#c8aa6a]"></div>
-                    <div class="w-1.5 h-1.5 mx-1.5 border border-[#c8aa6a] rotate-45"></div>
+                    <div class="w-1.5 h-1.5 mx-1.5 border border-[#c8aa6a] rotate-45 flex-shrink-0"></div>
                     <div class="h-[0.5px] flex-1 bg-gradient-to-l from-transparent via-[#c8aa6a] to-[#c8aa6a]"></div>
                 </div>
-            </div>
-            <!-- Header Right Container (Horizontal Row when scrolled) -->
+            </div>            <!-- Header Right Container (Stacked: Info on top, Button on bottom) -->
             <div id="header-right-container"
-                class="opacity-0 pointer-events-none transition-all duration-500 scale-90 absolute top-1/2 -translate-y-1/2 mt-2 right-4 flex items-center gap-3">
+                class="opacity-0 pointer-events-none transition-all duration-700 scale-95 absolute top-[16px] right-10 flex flex-col items-end gap-2">
                 
-                <!-- Change Date Button (Moved to the left, no pencil icon) -->
-                <div id="header-change-date-btn"
-                    onclick="document.getElementById('edit-booking-modal').classList.remove('hidden');"
-                    class="group flex items-center text-[#C8A96A] bg-[#FAF6EC] px-4 py-2 rounded-full shadow-sm border border-[#C8A96A]/20 cursor-pointer active:scale-95 transition-transform">
-                    <span class="text-[11px] font-display font-bold uppercase tracking-widest leading-none">Thay đổi ngày</span>
+                <!-- Mini Summary Row -->
+                <div id="header-mini-summary" class="flex items-center gap-2.5">
+                    <span id="mini-summary-dates" class="font-bold text-[13px] text-graphite tracking-tight whitespace-nowrap"></span>
+                    <span class="w-px h-2.5 bg-primary/20"></span>
+                    <span id="mini-summary-guests" class="text-[11px] font-medium text-primary/80 italic whitespace-nowrap"></span>
                 </div>
 
-                <!-- Mini Summary (Dates & Guests on the right) -->
-                <div id="header-mini-summary" class="flex flex-col items-start leading-tight">
-                    <div class="flex items-center gap-1 text-primary">
-                        <span class="material-symbols-outlined text-[12px]">calendar_month</span>
-                        <span id="mini-summary-dates" class="font-bold text-xs text-graphite"></span>
-                    </div>
-                    <div class="flex items-center gap-1 text-primary/70">
-                        <span class="material-symbols-outlined text-[11px]">group</span>
-                        <span id="mini-summary-guests" class="text-[10px] font-medium italic"></span>
-                    </div>
+                <!-- Change Date Button (Compact pill below info) -->
+                <div id="header-change-date-btn"
+                    class="group flex items-center text-[#C8A96A] bg-[#FAF6EC]/80 px-4 py-1.5 rounded-full shadow-sm border border-[#C8A96A]/30 cursor-pointer active:scale-95 transition-all">
+                    <span class="text-[10px] font-display font-bold uppercase tracking-[0.14em] leading-none">Thay đổi ngày</span>
                 </div>
             </div>
         </header>
@@ -284,14 +277,21 @@
         <!-- Summary Bar -->
         <div id="summary-bar"
             class="px-4 py-3 bg-white border-b border-primary/20 cursor-pointer active:bg-slate-50 transition-colors shadow-sm relative z-40 flex items-center justify-between">
-            <div class="flex flex-col gap-1.5 justify-center">
-                <div class="flex items-center gap-2 text-primary">
-                    <span class="material-symbols-outlined text-lg">calendar_month</span>
-                    <span id="summary-dates" class="font-bold text-base tracking-wide text-graphite"></span>
+            <div class="flex flex-col gap-0.5 justify-center">
+                <!-- Row 1: Check-in -->
+                <div class="flex items-center gap-1.5 text-primary">
+                    <span class="material-symbols-outlined text-base">calendar_today</span>
+                    <span id="summary-checkin" class="font-bold text-[13px] text-graphite tracking-wide">Ngày Nhận: --/--/----</span>
                 </div>
-                <div class="flex items-center gap-2 text-primary/70">
-                    <span class="material-symbols-outlined text-base">group</span>
-                    <span id="summary-guests" class="text-sm font-medium tracking-wide"></span>
+                <!-- Row 2: Check-out -->
+                <div class="flex items-center gap-1.5 text-primary">
+                    <span class="material-symbols-outlined text-base">calendar_month</span>
+                    <span id="summary-checkout" class="font-bold text-[13px] text-graphite tracking-wide">Ngày Trả: --/--/----</span>
+                </div>
+                <!-- Row 3: Guests -->
+                <div class="flex items-center gap-1.5 text-primary/80">
+                    <span class="material-symbols-outlined text-[14px]">group</span>
+                    <span id="summary-guests" class="text-[12px] font-medium tracking-wide">Người Lớn 0 - Trẻ Em 0</span>
                 </div>
             </div>
             <div id="change-date-btn"
@@ -299,8 +299,6 @@
                 <span
                     class="text-xs font-display font-bold uppercase tracking-widest group-hover:text-[#FAF6EC] transition-colors duration-500">Thay
                     đổi ngày</span>
-                <span
-                    class="material-symbols-outlined text-[1rem] group-hover:text-[#FAF6EC] transition-colors duration-500">edit</span>
             </div>
         </div>
         <!-- Main Content -->
@@ -345,7 +343,125 @@
         </main>
     </div>
 
-    <script src="rooms.js?v=11.20"></script>
+    <script src="rooms.js?v=11.31"></script>
+
+    <!-- Script hiệu ứng Header độc lập (Đảm bảo hoạt động 100%) -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log("Header scroll logic initialized...");
+            const headerBar = document.getElementById('header-bar');
+            const summaryBar = document.getElementById('summary-bar');
+            const headerTitleContainer = document.getElementById('header-title-container');
+            const headerTitle = document.getElementById('header-title');
+            const headerDecorTop = document.getElementById('header-decor-top');
+            const headerDecorBottom = document.getElementById('header-decor-bottom');
+            const headerRightContainer = document.getElementById('header-right-container');
+
+            if (!headerBar) return;
+
+            let summaryTop = 0;
+            const updateTop = () => {
+                const rect = summaryBar?.getBoundingClientRect();
+                if (rect && rect.top > 0) {
+                    summaryTop = rect.top + window.scrollY;
+                }
+            };
+            
+            // Recalculate multiple times to catch late rendering
+            updateTop();
+            setTimeout(updateTop, 500);
+            setTimeout(updateTop, 1500);
+            setTimeout(updateTop, 3000);
+            window.addEventListener('resize', updateTop);
+
+            window.addEventListener('scroll', () => {
+                // Kích hoạt cực nhạy khi vừa bắt đầu cuộn (20px)
+                const triggerPoint = 20;
+                const isScrolled = window.scrollY > triggerPoint;
+
+                if (isScrolled) {
+                    // Trạng thái THU NHỎ
+                    if (headerTitleContainer) {
+                        headerTitleContainer.classList.replace('left-1/2', 'left-4');
+                        headerTitleContainer.classList.remove('-translate-x-1/2');
+                        // KHÔNG sử dụng flex-row nữa, giữ flex-col để decor nằm trên/dưới
+                    }
+                    if (headerTitle) headerTitle.classList.replace('text-[32px]', 'text-[25px]');
+                    
+                    if (headerDecorTop && headerDecorBottom) {
+                        headerDecorTop.classList.remove('opacity-0', 'pb-0.5');
+                        headerDecorBottom.classList.remove('opacity-0', 'pt-0.5');
+                        headerDecorTop.style.width = '140px';
+                        headerDecorBottom.style.width = '140px';
+                    }
+                    
+                    if (headerRightContainer) {
+                        headerRightContainer.classList.replace('opacity-0', 'opacity-100');
+                        headerRightContainer.classList.replace('scale-95', 'scale-100');
+                        headerRightContainer.classList.remove('pointer-events-none');
+                    }
+                    if (summaryBar) {
+                        summaryBar.style.opacity = '0';
+                        summaryBar.style.pointerEvents = 'none';
+                        summaryBar.style.transform = 'translateY(-10px)';
+                    }
+                } else {
+                    // Trạng thái ĐẦU TRANG
+                    if (headerTitleContainer) {
+                        headerTitleContainer.classList.replace('left-4', 'left-1/2');
+                        headerTitleContainer.classList.add('-translate-x-1/2');
+                    }
+                    if (headerTitle) headerTitle.classList.replace('text-[25px]', 'text-[32px]');
+                    
+                    if (headerDecorTop && headerDecorBottom) {
+                        headerDecorTop.classList.add('opacity-0', 'pb-0.5');
+                        headerDecorBottom.classList.add('opacity-0', 'pt-0.5');
+                        headerDecorTop.style.width = '0';
+                        headerDecorBottom.style.width = '0';
+                    }
+                    
+                    if (headerRightContainer) {
+                        headerRightContainer.classList.replace('opacity-100', 'opacity-0');
+                        headerRightContainer.classList.replace('scale-100', 'scale-95');
+                        headerRightContainer.classList.add('pointer-events-none');
+                    }
+                    if (summaryBar) {
+                        summaryBar.style.opacity = '1';
+                        summaryBar.style.pointerEvents = 'auto';
+                        summaryBar.style.transform = 'translateY(0)';
+                    }
+                }
+            });
+
+            // Đồng bộ dữ liệu Mini Summary ngay khi tải trang
+            setTimeout(() => {
+                const stored = sessionStorage.getItem('chonVillageBooking');
+                if (stored) {
+                    const data = JSON.parse(stored);
+                    const miniDates = document.getElementById('mini-summary-dates');
+                    const miniGuests = document.getElementById('mini-summary-guests');
+                    
+                    if (miniDates && data.checkin && data.checkout) {
+                        const ci = data.checkin.split('-').reverse().join('/');
+                        const co = data.checkout.split('-').reverse().join('/');
+                        const ciShort = data.checkin.split('-').reverse().slice(0, 2).join('/');
+                        const coShort = data.checkout.split('-').reverse().slice(0, 2).join('/');
+                        
+                        document.getElementById('summary-checkin').textContent = `Ngày Nhận: ${ci}`;
+                        document.getElementById('summary-checkout').textContent = `Ngày Trả: ${co}`;
+                        miniDates.textContent = `${ciShort} - ${coShort}`;
+                    }
+                    if (miniGuests) {
+                        const guestFull = `Người Lớn ${data.adults || 0}${data.children > 0 ? ` - Trẻ Em ${data.children}` : ''}`;
+                        const guestMini = `NL ${data.adults || 0}${data.children > 0 ? ` - TE ${data.children}` : ''}`;
+                        
+                        document.getElementById('summary-guests').textContent = guestFull;
+                        miniGuests.textContent = guestMini;
+                    }
+                }
+            }, 500);
+        });
+    </script>
 
     <!-- Floating Contact Buttons -->
     <!-- Floating Contact Action Button -->

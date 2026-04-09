@@ -28,6 +28,11 @@ const formatDateObj = (d) => {
     return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 };
 
+const formatDateShort = (d) => {
+    if (!d || !(d instanceof Date)) return "";
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
 const renderCurrency = (val) => {
     if (val === undefined || val === null || isNaN(val)) return "0";
     return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
@@ -436,6 +441,91 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, 1500);
     }
 
+    // --- SMART PRICING HELPERS ---
+    
+    /**
+     * Finds typical rates (weekday/weekend) for a room in a specific month based on sheet data.
+     * Used for Suggestion Cards where specific dates aren't selected yet.
+     */
+    function getMonthlyTypicalRates(roomId, baseDate) {
+        const month = baseDate.getMonth();
+        const year = baseDate.getFullYear();
+        const data = pricingData[roomId] || {};
+        const defaults = data['default'] || { weekday: 800000, weekend: 1000000, surcharge: 450000 };
+        
+        // Scan days to find actual rates for this specific month
+        let foundWeekday = null;
+        let foundWeekend = null;
+        
+        for (let i = 1; i <= 28; i++) {
+            const d = new Date(year, month, i);
+            const dStr = getStr(d);
+            const dayData = data[dStr];
+            if (dayData) {
+                const dow = d.getDay();
+                const isWe = (dow === 5 || dow === 6 || dow === 0);
+                if (isWe && !foundWeekend) foundWeekend = dayData.weekend;
+                if (!isWe && !foundWeekday) foundWeekday = dayData.weekday;
+            }
+            if (foundWeekday && foundWeekend) break;
+        }
+        
+        return {
+            weekday: foundWeekday || defaults.weekday,
+            weekend: foundWeekend || defaults.weekend,
+            surcharge: defaults.surcharge
+        };
+    }
+
+    /**
+     * Shared function to generate Price HTML block
+     * Supports both "Standard" (Weekday/Weekend) and "Breakdown" (Individual nights)
+     */
+    function generatePriceHTML(options) {
+        const { 
+            forceIndividual, 
+            baseWeekday, 
+            baseWeekend, 
+            nightlyDetails, 
+            surchargeText 
+        } = options;
+
+        let html = `
+            <div class="flex flex-col gap-0.5 -ml-3">
+                ${!forceIndividual ? '<p class="text-[11px] text-black uppercase tracking-tight mb-1">Giá Niêm Yết</p>' : ''}
+                <div class="space-y-1">`;
+
+        if (!forceIndividual) {
+            html += `
+                <div class="flex items-baseline gap-1 whitespace-nowrap">
+                    <span class="text-[15px] font-bold text-graphite leading-none">${renderCurrency(baseWeekday)}</span>
+                    <span class="text-[12px] font-normal text-black">/ Đêm Trong Tuần (Thứ 2 - Thứ 5)</span>
+                </div>
+                <div class="flex items-baseline gap-1 whitespace-nowrap">
+                    <span class="text-[15px] font-bold text-graphite leading-none">${renderCurrency(baseWeekend)}</span>
+                    <span class="text-[12px] font-normal text-black">/ Đêm Cuối Tuần (Thứ 6 - Chủ Nhật)</span>
+                </div>`;
+        } else {
+            html += nightlyDetails.map(n => {
+                const label = n.isHoliday ? "Giá Lễ Ngày" : "Giá Ngày";
+                const dObj = (typeof n.date === 'string') ? parseLocal(n.date) : n.date;
+                return `
+                    <div class="flex items-baseline gap-1 whitespace-nowrap">
+                        <span class="text-[12px] font-normal text-black">${label} ${formatDateShort(dObj)} :</span>
+                        <span class="text-[15px] font-bold text-graphite leading-none">${renderCurrency(n.price)}</span>
+                        <span class="text-[12px] font-normal text-black">/ 1 Đêm</span>
+                    </div>`;
+            }).join('');
+        }
+
+        html += `
+                </div>
+                <p class="text-[12px] sm:text-[13px] text-black font-bold mt-1.5">${surchargeText}</p>
+            </div>`;
+        
+        return html;
+    }
+
     /** -------------------------------------------------------------------
      * CORE FUNCTIONS (Part of main initialization)
      * ------------------------------------------------------------------- */
@@ -797,43 +887,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const surchargeText = `Phòng tiêu chuẩn 2 khách - Phụ thu khách thứ 3: ${renderCurrency(selectedSurcharge)}đ/đêm`;
 
-            // Pricing Breakdown Display
-            let priceHtml = "";
-            const formatDateShort = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+            // Use shared price generator
+            const priceHtml = generatePriceHTML({
+                forceIndividual: forceIndividual,
+                baseWeekday: baseWeekday,
+                baseWeekend: baseWeekend,
+                nightlyDetails: nightlyDetails,
+                surchargeText: surchargeText
+            });
 
-            priceHtml = `
-                <div class="flex flex-col gap-0.5 -ml-3">
-                    <p class="text-[11px] text-black uppercase tracking-tight mb-1">Giá Niêm Yết</p>
-                    <div class="space-y-1">`;
-
-            if (!forceIndividual) {
-                // DEFAULT: Show BOTH stacked (Image in Step 272)
-                priceHtml += `
-                    <div class="flex items-baseline gap-1 whitespace-nowrap">
-                        <span class="text-[15px] font-bold text-graphite leading-none">${renderCurrency(baseWeekday)}</span>
-                        <span class="text-[12px] font-normal text-black">/ Đêm Trong Tuần (Thứ 2 - Thứ 5)</span>
-                    </div>
-                    <div class="flex items-baseline gap-1 whitespace-nowrap">
-                        <span class="text-[15px] font-bold text-graphite leading-none">${renderCurrency(baseWeekend)}</span>
-                        <span class="text-[12px] font-normal text-black">/ Đêm Cuối Tuần (Thứ 6 - Chủ Nhật)</span>
-                    </div>`;
-            } else {
-                // FORCE INDIVIDUAL DISPLAY for 't' or 'l' Note
-                priceHtml += nightlyDetails.map(n => {
-                    const label = n.isHoliday ? "Giá Lễ Ngày" : "Giá Ngày";
-                    return `
-                        <div class="flex items-baseline gap-1 whitespace-nowrap">
-                            <span class="text-[12px] font-normal text-black">${label} ${formatDateShort(n.date)} :</span>
-                            <span class="text-[15px] font-bold text-graphite leading-none">${renderCurrency(n.price)}</span>
-                            <span class="text-[12px] font-normal text-black">/ 1 Đêm</span>
-                        </div>`;
-                }).join('');
-            }
-
-            priceHtml += `
-                    </div>
-                    <p class="text-[12px] sm:text-[13px] text-black font-bold mt-1.5">${surchargeText}</p>
-                </div>`;
 
             let buttonHtml = "";
             let extraInfoHtml = "";
@@ -955,11 +1017,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 suggestions.forEach(s => {
                     const room = s.room;
                     const isAlreadySelected = selectedRooms.some(r => String(r.id) === String(room.id));
-                    // For suggestions, we use the 'default' pricing since we aren't displaying a specific stay
-                    const roomDayData = (pricingData[room.id] && pricingData[room.id]['default']) || {};
-                    const baseWeekday = roomDayData.weekday || 800000;
-                    const baseWeekend = roomDayData.weekend || 1000000;
-                    const selectedSurcharge = roomDayData.surcharge || 450000;
+                    const typicalRates = getMonthlyTypicalRates(room.id, checkinDate);
+                    const baseWeekday = typicalRates.weekday;
+                    const baseWeekend = typicalRates.weekend;
+                    const selectedSurcharge = typicalRates.surcharge;
 
                     let roomImg = room.img;
                     if (galleryData[room.id] && galleryData[room.id].length > 0) {
@@ -987,21 +1048,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                     const surchargeText = `Phòng tiêu chuẩn 2 khách - Phụ thu khách thứ 3: ${renderCurrency(selectedSurcharge)}đ/đêm`;
 
-                    const priceHtml = `
-                        <div class="flex flex-col gap-0.5 -ml-3">
-                            <p class="text-[11px] text-black uppercase tracking-tight mb-1">Giá Niêm Yết</p>
-                            <div class="space-y-1">
-                                <div class="flex items-baseline gap-1 whitespace-nowrap">
-                                    <span class="text-[15px] font-bold text-graphite leading-none">${renderCurrency(baseWeekday)}</span>
-                                    <span class="text-[12px] font-normal text-black">/ Đêm Trong Tuần (Thứ 2 - Thứ 5)</span>
-                                </div>
-                                <div class="flex items-baseline gap-1 whitespace-nowrap">
-                                    <span class="text-[15px] font-bold text-graphite leading-none">${renderCurrency(baseWeekend)}</span>
-                                    <span class="text-[12px] font-normal text-black">/ Đêm Cuối Tuần (Thứ 6 - Thứ 7)</span>
-                                </div>
-                            </div>
-                            <p class="text-[12px] sm:text-[13px] text-black font-bold mt-1.5">${surchargeText}</p>
-                        </div>`;
+                    // Use shared price generator (Always Standard for Suggestion Cards)
+                    const priceHtml = generatePriceHTML({
+                        forceIndividual: false,
+                        baseWeekday: baseWeekday,
+                        baseWeekend: baseWeekend,
+                        surchargeText: surchargeText
+                    });
+
 
                     const buttonHtml = `
                         <div onclick='openSuggestionModal("${room.id}")' class="relative p-[3px] rounded-xl bg-gradient-to-b from-[#BF953F] via-[#FCF6BA] to-[#AA771C] shadow-lg shadow-black/20 group/btn active:scale-95 transition-transform duration-300 cursor-pointer">
@@ -1485,34 +1539,54 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             let totalBase = 0;
-            let listHtml = "";
-            let avgSurcharge = 0;
 
-            stayDates.forEach(d => {
+            // --- DYNAMIC PRICE DISPLAY (SYNC WITH MAIN CARD) ---
+            const stayNightlyDetails = stayDates.map(d => {
                 const dStr = getStr(d);
-                const roomDayData = (pricingData[rId] && pricingData[rId][dStr]) || (pricingData[rId] && pricingData[rId]['default']) || {};
+                const rDayData = (pricingData[rId]?.[dStr]) || (pricingData[rId]?.['default']) || {};
+                const dayNote = (rDayData.note || "").toLowerCase().normalize("NFC");
+                const isDayHoliday = /l[ễễe]/.test(dayNote) || dayNote.includes("holiday") || /\bl\b/.test(dayNote);
                 const dow = d.getDay();
                 const isWe = (dow === 5 || dow === 6 || dow === 0);
-                const nightPrice = isWe ? (roomDayData.weekend || 1000000) : (roomDayData.weekday || 800000);
-                totalBase += nightPrice;
-                avgSurcharge = roomDayData.surcharge || 450000;
+                const nPrice = isWe ? (rDayData.weekend || 1000000) : (rDayData.weekday || 800000);
+                
+                return {
+                    date: d,
+                    price: nPrice,
+                    isHoliday: isDayHoliday,
+                    note: rDayData.note || ""
+                };
+            });
 
-                listHtml += `
-                    <div class="flex justify-between items-center text-slate-600">
-                        <span>Đêm ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}</span>
-                        <span class="font-bold">${renderCurrency(nightPrice)}đ</span>
-                    </div>
-                `;
+            totalBase = stayNightlyDetails.reduce((sum, n) => sum + n.price, 0);
+            
+            // INDIVIDUAL DISPLAY: In Suggestion Modal, always show individual breakdown once dates are chosen
+            let forceIndiv = true;
+            
+            // Reference prices for fallback display (if needed by helper)
+            const firstDateStr = getStr(stayDates[0]);
+            const firstDayData = (pricingData[rId]?.[firstDateStr]) || (pricingData[rId]?.['default']) || {};
+            const baseWk = firstDayData.weekday || 800000;
+            const baseWn = firstDayData.weekend || 1000000;
+            const selectedSurcharge = firstDayData.surcharge || 450000;
+
+            const surchargeTxt = `Phòng tiêu chuẩn 2 khách - Phụ thu khách thứ 3: ${renderCurrency(selectedSurcharge)}đ/đêm`;
+
+            // Replace standard list with synchronised generatePriceHTML output
+            list.innerHTML = generatePriceHTML({
+                forceIndividual: forceIndiv,
+                baseWeekday: baseWk,
+                baseWeekend: baseWn,
+                nightlyDetails: stayNightlyDetails,
+                surchargeText: surchargeTxt
             });
 
             // Surcharge logic (Adult 3+)
             let totalSurcharge = 0;
             if (adultCountLocal > 2) {
-                // Simplified Rule: Always use the rate from the data (Column I)
-                totalSurcharge = (adultCountLocal - 2) * avgSurcharge * stayDates.length;
+                totalSurcharge = (adultCountLocal - 2) * selectedSurcharge * stayDates.length;
             }
 
-            list.innerHTML = listHtml;
             const finalTotal = totalBase + totalSurcharge;
             totalEl.textContent = renderCurrency(finalTotal) + "đ / " + stayDates.length + " Đêm";
 
@@ -1527,6 +1601,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             container.classList.remove('hidden');
         };
+
+
 
         const renderDay = (d) => {
             const dStr = getStr(d);
@@ -1954,14 +2030,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (window.updateBookingSummaryLabels) window.updateBookingSummaryLabels(ci, co);
 
-            const updatedGuestLabel = (adultCountLocal > 0 && childCountLocal > 0)
-                ? `${adultCountLocal} NL, ${childCountLocal} TE`
-                : `${adultCountLocal} Người lớn`;
-
+            const summaryCheckinEl = document.getElementById('summary-checkin');
+            const summaryCheckoutEl = document.getElementById('summary-checkout');
             const summaryGuestsEl = document.getElementById('summary-guests');
+            const miniSummaryDatesEl = document.getElementById('mini-summary-dates');
             const miniSummaryGuestsEl = document.getElementById('mini-summary-guests');
-            if (summaryGuestsEl) summaryGuestsEl.textContent = updatedGuestLabel;
-            if (miniSummaryGuestsEl) miniSummaryGuestsEl.textContent = updatedGuestLabel;
+
+            if (summaryCheckinEl) summaryCheckinEl.textContent = `Ngày Nhận: ${formatDateObj(ciDate)}`;
+            if (summaryCheckoutEl) summaryCheckoutEl.textContent = `Ngày Trả: ${formatDateObj(coDate)}`;
+            
+            const guestFull = `Người Lớn ${adultCountLocal}${childCountLocal > 0 ? ` - Trẻ Em ${childCountLocal}` : ''}`;
+            const guestMini = `NL ${adultCountLocal}${childCountLocal > 0 ? ` - TE ${childCountLocal}` : ''}`;
+
+            if (summaryGuestsEl) summaryGuestsEl.textContent = guestFull;
+            if (miniSummaryGuestsEl) miniSummaryGuestsEl.textContent = guestMini;
+
+            if (miniSummaryDatesEl) {
+                const dCI = formatDateShort(ciDate);
+                const dCO = formatDateShort(coDate);
+                miniSummaryDatesEl.textContent = `${dCI} - ${dCO}`;
+            }
 
             // --- ANIMATION FLOW ---
             // 1. Render waitlist to create the slot
@@ -2008,41 +2096,93 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // --- HEADER SCROLL ANIMATION LOGIC ---
     if (summaryBar) {
-        const summaryTop = summaryBar.getBoundingClientRect().top + window.scrollY;
         const headerTitleContainer = document.getElementById('header-title-container');
+        const headerTitle = document.getElementById('header-title');
         const headerDecorTop = document.getElementById('header-decor-top');
         const headerDecorBottom = document.getElementById('header-decor-bottom');
-
         const headerRightContainer = document.getElementById('header-right-container');
 
+        // Capture initial top or fallback to a reasonable offset
+        let summaryTop = 0;
+        const updateTop = () => {
+            const rect = summaryBar.getBoundingClientRect();
+            if (rect.top > 0) summaryTop = rect.top + window.scrollY;
+        };
+        updateTop();
+        
+        window.addEventListener('resize', updateTop);
+        // Also update after 1s just in case content loaded late
+        setTimeout(updateTop, 1000);
+
         window.addEventListener('scroll', () => {
-            if (window.scrollY > summaryTop) {
-                headerTitleContainer?.classList.replace('left-1/2', 'left-4');
-                headerTitleContainer?.classList.remove('-translate-x-1/2');
-                headerTitle?.classList.replace('text-[28px]', 'text-[22px]');
-                headerDecorTop?.classList.remove('opacity-0');
-                headerDecorBottom?.classList.remove('opacity-0');
+            try {
+                // If summaryTop calculation failed, use fallback (100px)
+                const triggerPoint = (summaryTop > 50) ? (summaryTop - 20) : 100;
+                const isScrolled = window.scrollY > triggerPoint;
+                
+                if (isScrolled) {
+                    if (headerTitleContainer && !headerTitleContainer.classList.contains('left-4')) {
+                        headerTitleContainer.classList.replace('left-1/2', 'left-4');
+                        headerTitleContainer.classList.remove('-translate-x-1/2', 'flex-col');
+                        headerTitleContainer.classList.add('flex-row', 'gap-3', 'items-center');
+                    }
+                    
+                    if (headerTitle) {
+                        headerTitle.classList.replace('text-[32px]', 'text-[22px]');
+                    }
+                    
+                    if (headerDecorTop && headerDecorBottom) {
+                        headerDecorTop.classList.remove('opacity-0', 'pb-0.5', 'w-full', 'max-w-[120px]');
+                        headerDecorBottom.classList.remove('opacity-0', 'pt-0.5', 'w-full', 'max-w-[120px]');
+                        headerDecorTop.classList.add('w-[30px]', 'shrink-0'); 
+                        headerDecorBottom.classList.add('w-[30px]', 'shrink-0');
+                    }
+                    
+                    if (headerRightContainer) {
+                        headerRightContainer.classList.replace('opacity-0', 'opacity-100');
+                        headerRightContainer.classList.replace('translate-y-4', 'translate-y-0');
+                        headerRightContainer.classList.replace('scale-95', 'scale-100');
+                        headerRightContainer.classList.remove('pointer-events-none');
+                    }
 
-                // Show the full right container (button + mini summary)
-                headerRightContainer?.classList.replace('opacity-0', 'opacity-100');
-                headerRightContainer?.classList.remove('pointer-events-none');
-                headerRightContainer?.classList.replace('scale-90', 'scale-100');
+                    summaryBar.style.opacity = '0';
+                    summaryBar.style.pointerEvents = 'none';
+                    summaryBar.style.transform = 'translateY(-10px)';
+                    summaryBar.style.transition = 'all 0.4s ease';
+                    
+                } else {
+                    if (headerTitleContainer && headerTitleContainer.classList.contains('left-4')) {
+                        headerTitleContainer.classList.replace('left-4', 'left-1/2');
+                        headerTitleContainer.classList.add('-translate-x-1/2', 'flex-col');
+                        headerTitleContainer.classList.remove('flex-row', 'gap-3', 'items-center');
+                    }
+                    
+                    if (headerTitle) {
+                        headerTitle.classList.replace('text-[22px]', 'text-[32px]');
+                    }
+                    
+                    if (headerDecorTop && headerDecorBottom) {
+                        headerDecorTop.classList.add('opacity-0', 'pb-0.5', 'w-full', 'max-w-[120px]');
+                        headerDecorBottom.classList.add('opacity-0', 'pt-0.5', 'w-full', 'max-w-[120px]');
+                        headerDecorTop.classList.remove('w-[30px]', 'shrink-0');
+                        headerDecorBottom.classList.remove('w-[30px]', 'shrink-0');
+                    }
 
-                changeDateBtn?.classList.add('opacity-0', 'pointer-events-none');
-            } else {
-                headerTitleContainer?.classList.replace('left-4', 'left-1/2');
-                headerTitleContainer?.classList.add('-translate-x-1/2');
-                headerTitle?.classList.replace('text-[22px]', 'text-[28px]');
-                headerDecorTop?.classList.add('opacity-0');
-                headerDecorBottom?.classList.add('opacity-0');
+                    if (headerRightContainer) {
+                        headerRightContainer.classList.replace('opacity-100', 'opacity-0');
+                        headerRightContainer.classList.replace('translate-y-0', 'translate-y-4');
+                        headerRightContainer.classList.replace('scale-100', 'scale-95');
+                        headerRightContainer.classList.add('pointer-events-none');
+                    }
 
-                // Hide right container
-                headerRightContainer?.classList.replace('opacity-100', 'opacity-0');
-                headerRightContainer?.classList.add('pointer-events-none');
-                headerRightContainer?.classList.replace('scale-100', 'scale-90');
-
-                changeDateBtn?.classList.remove('opacity-0', 'pointer-events-none');
+                    summaryBar.style.opacity = '1';
+                    summaryBar.style.pointerEvents = 'auto';
+                    summaryBar.style.transform = 'translateY(0)';
+                }
+            } catch (err) {
+                console.warn("Scroll animation failed:", err);
             }
         });
     }
@@ -2206,12 +2346,12 @@ function renderWaitlist() {
         const rId = room.id;
         return `
             <div id="waitlist-item-${rId}" class="relative group/item shrink-0 transition-opacity duration-300">
-                <div class="w-11 h-11 rounded-lg overflow-hidden border border-primary shadow-sm bg-white">
+                <div class="w-[64px] h-[64px] rounded-full overflow-hidden border-2 border-primary shadow-md bg-white">
                     <img src="${room.img}" class="w-full h-full object-cover">
                 </div>
                 <!-- Nút X để xóa phòng -->
-                <button onclick="removeFromWaitlist(${index})" class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full size-[18px] flex items-center justify-center shadow-lg active:scale-95 transition-all z-10 border border-white">
-                    <span class="material-symbols-outlined text-[10px] font-bold">close</span>
+                <button onclick="removeFromWaitlist(${index})" class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full size-[22px] flex items-center justify-center shadow-lg active:scale-95 transition-all z-10 border border-white">
+                    <span class="material-symbols-outlined text-[13px] font-bold">close</span>
                 </button>
             </div>
         `;
@@ -2457,7 +2597,7 @@ function renderReviews(reviews) {
                 
                 <!-- Reviewer Header -->
                 <div class="flex items-center gap-3 relative z-10 mb-4">
-                    <div class="w-11 h-11 rounded-full bg-gradient-to-br from-[#C8A96A] to-[#A0824B] text-white flex items-center justify-center font-display font-bold text-lg shadow-inner shrink-0">
+                    <div class="w-20 h-20 rounded-full bg-gradient-to-br from-[#C8A96A] to-[#A0824B] text-white flex items-center justify-center font-display font-bold text-3xl shadow-inner shrink-0">
                         ${initials}
                     </div>
                     <div class="flex flex-col min-w-0">
@@ -2775,7 +2915,7 @@ function updateDetailDisplay() {
             return `
             <div onclick="jumpToGallery(${idx})" 
                  ${isActive ? 'id="active-thumb"' : ''}
-                 class="w-14 h-14 flex-shrink-0 cursor-pointer border-2 transition-all duration-300 rounded overflow-hidden relative ${isActive ? 'border-[#BF953F] ring-2 ring-[#BF953F]/20 scale-105' : 'border-transparent opacity-60 hover:opacity-100'}">
+                 class="w-20 h-20 flex-shrink-0 cursor-pointer border-2 transition-all duration-300 rounded overflow-hidden relative ${isActive ? 'border-[#BF953F] ring-2 ring-[#BF953F]/20 scale-105' : 'border-transparent opacity-60 hover:opacity-100'}">
                 <img src="${thumbUrl}" class="w-full h-full object-cover bg-slate-800 pointer-events-none"
                      onerror="this.style.opacity='0'"/>
                 ${m.type === 'video' ? `
